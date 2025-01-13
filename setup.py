@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="myfacerec",  # Renamed to "rolo-rec" for PyPI
+    name="rolo-rec",  # Renamed to "rolo-rec" for PyPI
     version="0.2.0",
     description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
     author="wuhp",
