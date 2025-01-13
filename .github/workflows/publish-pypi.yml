@@ -1,57 +1,106 @@
-name: publish-pypi
+name: Build, Test, and Publish
 
 on:
   push:
     branches:
       - main
+      - master
     tags:
-      - 'v*'
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v*.*.*'  # Trigger on tag pushes like v1.0.0
   pull_request:
+    branches:
+      - main
+      - master
+  release:
+    types: [published]
 
 jobs:
-  test-build-publish:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: windows-latest
 
     steps:
-      # 1. Check out code
-      - name: Check out the repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'  # Specify the Python version you need
 
-      # 3. Install dependencies
-      #    This includes build tools (build, twine), test runner (pytest), and any library dev deps
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
-          pip install --upgrade pip
-          pip install build twine pytest flake8  # adjust if you use black or mypy, etc.
-          pip install -e .
+          python -m pip install --upgrade pip
+          pip install setuptools wheel
 
-      # 4. (Optional) Lint your code
-      - name: Lint
+      - name: Clean previous builds
         run: |
-          flake8 .
+          if exist build rmdir /s /q build
+          if exist dist rmdir /s /q dist
+          if exist face_rec.egg-info rmdir /s /q face_rec.egg-info
+        shell: cmd
 
-      # 5. Run tests
+      - name: Build Python package
+        run: |
+          python setup.py sdist bdist_wheel
+        shell: cmd
+
+      - name: Verify dist contents
+        run: |
+          echo "Checking dist directory contents:"
+          dir dist
+        shell: cmd
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-python-package
+          path: dist/**/*
+
       - name: Run tests
         run: |
-          pytest
+          REM List build artifacts for debugging
+          dir dist\
+          REM Install the built package
+          for %%f in (dist\*.whl) do pip install %%f || exit 1
+          REM Install testing dependencies
+          pip install pytest
+          REM Run tests (make sure you have a tests/ folder!)
+          pytest tests/
+        shell: cmd
 
-      # 6. Build the package (sdist + wheel)
-      - name: Build package
-        run: |
-          python -m build
+  publish:
+    needs: build
+    runs-on: windows-latest
+    if: >
+      ${{ 
+        (github.event_name == 'release' && github.event.action == 'published') ||
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+      }}
 
-      # 7. Publish to PyPI if pushing a tag
-      - name: Publish package to PyPI
-        if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: built-python-package
+          path: dist
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
         run: |
-          python -m twine upload dist/*
+          python -m pip install --upgrade pip
+          pip install twine
+
+      - name: Publish to PyPI with Twine
+        run: |
+          python -m twine upload dist/* --verbose
         env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+          # If using an API token:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
