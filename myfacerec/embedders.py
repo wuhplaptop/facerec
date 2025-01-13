@@ -5,7 +5,6 @@ import numpy as np
 import torch
 from PIL import Image
 
-
 class FaceEmbedder(abc.ABC):
     """Abstract base class for face embedding."""
     @abc.abstractmethod
@@ -28,7 +27,6 @@ class FacenetEmbedder(FaceEmbedder):
         for (x1, y1, x2, y2) in boxes:
             face = image.crop((x1, y1, x2, y2)).resize((160, 160))
 
-            # Optional alignment/preprocessing
             if self.alignment_fn:
                 face = self.alignment_fn(face)
 
