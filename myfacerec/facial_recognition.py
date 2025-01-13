@@ -73,13 +73,11 @@ class FacialRecognition:
         return model_path
 
     def detect_faces(self, image):
-        # Optional hook
         if self.config.before_detect:
             image = self.config.before_detect(image)
 
         boxes = self.detector.detect_faces(image)
 
-        # Optional hook
         if self.config.after_detect:
             self.config.after_detect(boxes)
 
@@ -106,7 +104,7 @@ class FacialRecognition:
                     collected_embeddings.append(emb[0])
 
         if not collected_embeddings:
-            return f"[Registration] No valid single-face images for '{user_id}'."
+            return f"[Registration] No valid single-face images found for '{user_id}'."
 
         if user_id not in self.user_data:
             self.user_data[user_id] = []
