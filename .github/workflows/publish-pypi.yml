@@ -36,7 +36,7 @@ jobs:
         run: |
           if exist build rmdir /s /q build
           if exist dist rmdir /s /q dist
-          if exist face_rec.egg-info rmdir /s /q face_rec.egg-info
+          if exist rolo_rec.egg-info rmdir /s /q rolo_rec.egg-info
         shell: cmd
 
       - name: Build Python package
