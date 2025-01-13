@@ -8,7 +8,7 @@ from .config import Config
 from .facial_recognition import FacialRecognition
 
 def main():
-    parser = argparse.ArgumentParser(prog="face-rec")
+    parser = argparse.ArgumentParser(prog="rolo-rec")
     subparsers = parser.add_subparsers(dest="command")
 
     # Register command
