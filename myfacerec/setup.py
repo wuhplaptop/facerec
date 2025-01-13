@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="myfacerec",
+    name="face-rec",  # Updated package name for PyPI
     version="0.2.0",
     description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
     author="Your Name",
@@ -20,7 +20,8 @@ setup(
     python_requires=">=3.7",
     entry_points={
         "console_scripts": [
-            "myfacerec=myfacerec.cli:main", 
+            # Command name  =  package.module:function
+            "face-rec=myfacerec.cli:main", 
         ],
     },
 )
