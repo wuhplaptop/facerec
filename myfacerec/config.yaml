@@ -1,2 +1,0 @@
-default_model_url: "https://raw.githubusercontent.com/wuhplaptop/facerec/main/face.pt"
-default_conf_threshold: 0.5
