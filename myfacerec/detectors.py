@@ -22,7 +22,6 @@ class YOLOFaceDetector(FaceDetector):
             for box in result.boxes:
                 conf = box.conf.item()
                 cls = int(box.cls.item())
-                # Assumes '0' is face class
                 if conf >= self.conf_threshold and cls == 0:
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     boxes.append((int(x1), int(y1), int(x2), int(y2)))
