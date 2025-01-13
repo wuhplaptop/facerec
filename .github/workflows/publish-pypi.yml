@@ -1,0 +1,44 @@
+name: Publish to PyPI
+
+on:
+  # Triggers the workflow on push tags like v1.0.0 or 1.0.0
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out the code
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      # 2. Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # 3. Install build tools (e.g. build, twine) and dependencies
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install build twine
+          # If your package needs special dependencies to build, install them here
+          # e.g. pip install -r requirements.txt
+
+      # 4. Build the package (sdist + wheel)
+      - name: Build package
+        run: |
+          python -m build
+
+      # 5. Publish to PyPI (only if you want to publish automatically when you push a new version tag)
+      - name: Publish package to PyPI
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          python -m twine upload dist/*
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
