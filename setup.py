@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="rolo-rec",
-    version="0.4.6",
+    version="0.4.7",
     description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
     author="wuhp",
     packages=find_packages(),
