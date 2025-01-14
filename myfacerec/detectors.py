@@ -1,4 +1,4 @@
-# detectors.py
+# myfacerec/detectors.py
 
 import abc
 from typing import List, Tuple
