@@ -6,9 +6,9 @@ import numpy as np
 from PIL import Image
 from unittest.mock import MagicMock, patch
 
-from rolo_rec.config import Config
-from rolo_rec.facial_recognition import FacialRecognition
-from rolo_rec.combined_model import CombinedFacialRecognitionModel
+from myfacerec.config import Config
+from myfacerec.facial_recognition import FacialRecognition
+from myfacerec.combined_model import CombinedFacialRecognitionModel
 import torch
 
 @pytest.fixture
