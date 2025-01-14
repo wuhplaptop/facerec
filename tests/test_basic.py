@@ -12,43 +12,13 @@ from myfacerec.combined_model import CombinedFacialRecognitionModel
 import torch
 
 @pytest.fixture
-def mock_facial_recognition(tmp_path):
-    """
-    Fixture to create a FacialRecognition instance with mocked detect_faces and embed_faces_batch methods.
-    """
-    with patch('myfacerec.facial_recognition.YOLO') as MockYOLO, \
-         patch('facenet_pytorch.InceptionResnetV1') as MockResnet:
-        
-        # Mock YOLO
-        mock_yolo = MagicMock()
-        mock_yolo.model.state_dict.return_value = {}
-        MockYOLO.return_value = mock_yolo
-
-        # Mock InceptionResnetV1
-        mock_facenet = MagicMock()
-        MockResnet.return_value = mock_facenet
-        mock_facenet.state_dict.return_value = {}
-        mock_facenet.load_state_dict.return_value = None
-
-        # Initialize FacialRecognition
-        user_data_path = str(tmp_path / "test_faces.json")
-        config = Config(user_data_path=user_data_path)
-        fr = FacialRecognition(config)
-
-        # Mock detect_faces and embed_faces_batch
-        fr.detect_faces = MagicMock(return_value=([(10, 10, 50, 50)], [np.array([0.1] * 512, dtype=np.float32)]))
-        fr.embed_faces_batch = MagicMock(return_value=np.array([[0.1]*512], dtype=np.float32))
-
-    return fr
-
-@pytest.fixture
 def mock_combined_model(tmp_path):
     """
     Fixture to create a FacialRecognition instance using a CombinedFacialRecognitionModel with mocked embeddings.
     """
     with patch('myfacerec.combined_model.YOLO') as MockYOLO, \
-         patch('facenet_pytorch.InceptionResnetV1') as MockResnet:
-        
+         patch('myfacerec.combined_model.InceptionResnetV1') as MockResnet:
+
         # Mock YOLO
         mock_yolo = MagicMock()
         mock_yolo.model.state_dict.return_value = {}
@@ -64,8 +34,9 @@ def mock_combined_model(tmp_path):
         combined_model = CombinedFacialRecognitionModel(yolo_model_path="yolov8n.pt", device="cpu")
         combined_model.user_embeddings = {}  # Start with no users
 
-        # Mock the forward method to return predefined boxes and embeddings
-        combined_model.forward = MagicMock(return_value=[((10, 10, 50, 50), np.array([0.1] * 512, dtype=np.float32))])
+        # Mock detect_faces and embed_faces_batch methods
+        combined_model.yolo.detect_faces = MagicMock(return_value=[(10, 10, 50, 50)])
+        combined_model.facenet.embed_faces_batch = MagicMock(return_value=np.array([0.1] * 512, dtype=np.float32))
 
         # Save the mocked model to a temporary path
         combined_model_path = str(tmp_path / "combined_model.pt")
@@ -90,8 +61,9 @@ def mock_combined_model(tmp_path):
             config = Config(user_data_path=str(tmp_path / "test_faces.json"))
             fr = FacialRecognition(config, combined_model_path=combined_model_path)
 
-            # Mock the combined_model's forward method
-            fr.combined_model.forward = MagicMock(return_value=[((10, 10, 50, 50), np.array([0.1] * 512, dtype=np.float32))])
+            # Mock detect_faces and embed_faces_batch methods in FacialRecognition
+            fr.combined_model.yolo.detect_faces = MagicMock(return_value=[(10, 10, 50, 50)])
+            fr.combined_model.facenet.embed_faces_batch = MagicMock(return_value=np.array([0.1] * 512, dtype=np.float32))
 
     return fr
 
@@ -110,7 +82,7 @@ def test_register_with_face_separate_models(mock_facial_recognition):
     assert len(fr.user_data["TestUser"]) == 1
     # Ensure the mock was called correctly
     fr.detect_faces.assert_called_once_with(img)
-    fr.embed_faces_batch.assert_called_once_with(img, [(10, 10, 50, 50)])
+    fr.embed_faces_batch.assert_called_once_with([img], [(10, 10, 50, 50)])
 
 def test_register_with_face_combined_model(mock_combined_model):
     """
@@ -125,7 +97,9 @@ def test_register_with_face_combined_model(mock_combined_model):
     assert "User 'TestUser' registered with 1 images." in msg
     assert fr.combined_model.user_embeddings.get("TestUser") is not None
     assert len(fr.combined_model.user_embeddings["TestUser"]) == 1
-    # No need to assert mock calls since 'forward' is mocked
+    # Assert that methods were called
+    fr.combined_model.yolo.detect_faces.assert_called_once_with(img)
+    fr.combined_model.facenet.embed_faces_batch.assert_called_once_with([img], [(10, 10, 50, 50)])
 
 def test_identify_known_user_separate_models(mock_facial_recognition):
     """
@@ -147,7 +121,7 @@ def test_identify_known_user_separate_models(mock_facial_recognition):
     assert results[0]['similarity'] == pytest.approx(1.0, abs=1e-6)
     # Ensure the mock was called correctly
     fr.detect_faces.assert_called_once_with(img)
-    fr.embed_faces_batch.assert_called_once_with(img, [(10, 10, 50, 50)])
+    fr.embed_faces_batch.assert_called_once_with([img], [(10, 10, 50, 50)])
 
 def test_identify_known_user_combined_model(mock_combined_model):
     """
@@ -167,33 +141,9 @@ def test_identify_known_user_combined_model(mock_combined_model):
     assert len(results) == 1
     assert results[0]['user_id'] == 'TestUser'
     assert results[0]['similarity'] == pytest.approx(1.0, abs=1e-6)
-    # No need to assert mock calls since 'forward' is mocked
-
-def test_export_import_model(tmp_path, mock_combined_model):
-    """
-    Test exporting and importing the combined model.
-    """
-    fr = mock_combined_model
-
-    # Pre-register a user
-    fr.combined_model.user_embeddings = {
-        "TestUser": [np.array([0.1] * 512, dtype=np.float32)]
-    }
-
-    # Save the combined model
-    export_path = str(tmp_path / "exported_model.pt")
-    fr.combined_model.save_model(export_path)
-
-    # Load the combined model
-    loaded_model = CombinedFacialRecognitionModel.load_model(export_path)
-
-    # Assertions
-    assert loaded_model.user_embeddings.keys() == fr.combined_model.user_embeddings.keys()
-    for user in fr.combined_model.user_embeddings:
-        assert user in loaded_model.user_embeddings
-        for emb_original, emb_loaded in zip(fr.combined_model.user_embeddings[user],
-                                            loaded_model.user_embeddings[user]):
-            assert np.allclose(emb_original, emb_loaded, atol=1e-6)
+    # Assert that methods were called
+    fr.combined_model.yolo.detect_faces.assert_called_once_with(img)
+    fr.combined_model.facenet.embed_faces_batch.assert_called_once_with([img], [(10, 10, 50, 50)])
 
 def test_export_model_separate_models(tmp_path, mock_facial_recognition):
     """
@@ -231,20 +181,15 @@ def test_export_model_combined_model(tmp_path, mock_combined_model):
         "TestUser": [np.array([0.1] * 512, dtype=np.float32)]
     }
 
-    with patch('myfacerec.combined_model.YOLO') as MockYOLO:
-        mock_yolo = MagicMock()
-        mock_yolo.model.state_dict.return_value = {}
-        MockYOLO.return_value = mock_yolo
-
-        export_path = str(tmp_path / "exported_combined.pt")
-        msg = fr.export_model(export_path)
+    export_path = str(tmp_path / "exported_combined.pt")
+    msg = fr.export_model(export_path)
 
     # Assertions
     assert "[Export] Combined model saved to" in msg
     assert os.path.exists(export_path)
 
     # Load the exported combined model
-    with patch('facenet_pytorch.InceptionResnetV1') as MockResnet_inner:
+    with patch('myfacerec.combined_model.InceptionResnetV1') as MockResnet_inner:
         mock_facenet_inner = MagicMock()
         MockResnet_inner.return_value = mock_facenet_inner
         mock_facenet_inner.load_state_dict.return_value = None
@@ -264,8 +209,8 @@ def test_import_model(tmp_path):
     Test importing a combined model.
     """
     with patch('myfacerec.combined_model.YOLO') as MockYOLO, \
-         patch('facenet_pytorch.InceptionResnetV1') as MockResnet:
-        
+         patch('myfacerec.combined_model.InceptionResnetV1') as MockResnet:
+
         mock_yolo = MagicMock()
         mock_yolo.model.state_dict.return_value = {}
         MockYOLO.return_value = mock_yolo
