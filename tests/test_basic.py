@@ -1,6 +1,6 @@
 import os
 import pytest
-import numpy as np  # <--- Add this
+import numpy as np
 from PIL import Image
 from myfacerec.config import Config
 from myfacerec.facial_recognition import FacialRecognition
@@ -53,4 +53,5 @@ def test_identify_known_user(tmp_path):
 
     assert len(results) == 1
     assert results[0]['user_id'] == 'TestUser'
-    assert results[0]['similarity'] == 1.0
+    # Change from exact equality to approximate
+    assert results[0]['similarity'] == pytest.approx(1.0, abs=1e-6)
