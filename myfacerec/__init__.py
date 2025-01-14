@@ -1,4 +1,17 @@
-# __init__.py
+# myfacerec/__init__.py
 
-# Usually empty or sets up top-level imports
-# For now, just leave it empty or do minimal imports.
+from .facial_recognition import FacialRecognition
+from .config import Config
+from .detectors import YOLOFaceDetector
+from .embedders import FacenetEmbedder
+from .data_store import JSONUserDataStore
+from .hooks import Hooks
+
+__all__ = [
+    "FacialRecognition",
+    "Config",
+    "YOLOFaceDetector",
+    "FacenetEmbedder",
+    "JSONUserDataStore",
+    "Hooks",
+]
