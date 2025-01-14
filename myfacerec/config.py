@@ -14,7 +14,7 @@ class Config:
         conf_threshold=0.5,
         device=None,
         user_data_path="user_faces.json",
-        alignment_fn=None,
+        alignment_fn=None,     # <--- Keep or set default to None
         before_detect=None,
         after_detect=None,
         before_embed=None,
@@ -30,6 +30,7 @@ class Config:
         self.user_data_path = user_data_path
 
         # Optional hooks
+        self.alignment_fn = alignment_fn   # <--- ensure we set it
         self.before_detect = before_detect
         self.after_detect = after_detect
         self.before_embed = before_embed
