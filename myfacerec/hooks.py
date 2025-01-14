@@ -4,10 +4,10 @@ from typing import Callable, List, Optional
 
 class Hooks:
     def __init__(self):
-        self.before_detect: Optional[List[Callable]] = []
-        self.after_detect: Optional[List[Callable]] = []
-        self.before_embed: Optional[List[Callable]] = []
-        self.after_embed: Optional[List[Callable]] = []
+        self.before_detect: List[Callable] = []
+        self.after_detect: List[Callable] = []
+        self.before_embed: List[Callable] = []
+        self.after_embed: List[Callable] = []
 
     def register_before_detect(self, func: Callable):
         self.before_detect.append(func)
