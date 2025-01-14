@@ -2,12 +2,13 @@
 
 import torch
 import torch.nn as nn
-from ultralytics import YOLO
+from ultralytics import YOLO  # Ensure YOLO is imported
 from facenet_pytorch import InceptionResnetV1
 from PIL import Image
 import numpy as np
 import json
 import os
+from pathlib import Path  # Import Path for type hinting
 
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(self, yolo_model_path: str, device: str = 'cpu'):
@@ -90,7 +91,9 @@ class CombinedFacialRecognitionModel(nn.Module):
         """
         state = torch.load(load_path, map_location='cpu')
         device = state.get('device', 'cpu')
-        model = cls(yolo_model_path='', device=device)  # Temporary path; will load state_dict next
+        yolo_model_path = state.get('yolo_model_path', 'yolov8n.pt')  # Default path or retrieve if stored
+
+        model = cls(yolo_model_path=yolo_model_path, device=device)  # Initialize with a valid path
 
         # Load YOLO state_dict
         model.yolo.model.load_state_dict(state['yolo_state_dict'])
