@@ -13,6 +13,8 @@ from .detectors import YOLOFaceDetector, FaceDetector
 from .embedders import FacenetEmbedder, FaceEmbedder
 from .data_store import JSONUserDataStore, UserDataStore
 
+from ultralytics import YOLO  # Updated import
+
 import torch
 
 class FacialRecognition:
@@ -78,10 +80,15 @@ class FacialRecognition:
         else:
             model_path = self.config.yolo_model_path
 
-        yolo_model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
-        yolo_model.to(self.config.device)
-        self.logger.info("YOLO model loaded from %s on device %s.", model_path, self.config.device)
-        return YOLOFaceDetector(yolo_model, conf_threshold=self.config.conf_threshold)
+        # Load YOLO model using Ultralytics YOLO class directly
+        try:
+            yolo_model = YOLO(model_path)  # Load the model from the specified path
+            yolo_model.to(self.config.device)
+            self.logger.info("YOLO model loaded from %s on device %s.", model_path, self.config.device)
+            return YOLOFaceDetector(yolo_model, conf_threshold=self.config.conf_threshold)
+        except Exception as e:
+            self.logger.error(f"Failed to load YOLO model: {e}")
+            raise
 
     def _initialize_embedder(self) -> FacenetEmbedder:
         """
@@ -289,7 +296,7 @@ class FacialRecognition:
         try:
             state = torch.load(import_path, map_location=config.device)
             detector = YOLOFaceDetector(
-                torch.hub.load('ultralytics/yolov5', 'custom', path=config.yolo_model_path, force_reload=True),
+                YOLO(config.yolo_model_path),  # Load YOLO model using Ultralytics YOLO class
                 conf_threshold=config.conf_threshold
             )
             embedder = FacenetEmbedder(
