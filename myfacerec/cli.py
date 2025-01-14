@@ -128,9 +128,11 @@ def main():
             detector_plugin=args.detector,
             embedder_plugin=args.embedder
         )
+        # Default to 'face.pt' if combined_model_path not provided
+        combined_model_path = args.combined_model_path or "models/face.pt"
         fr = FacialRecognition(
             config,
-            combined_model_path=args.combined_model_path
+            combined_model_path=combined_model_path
         )
 
     # -------------------------------------------------------------------------
@@ -216,14 +218,16 @@ def main():
             print(f"[Delete] User '{args.user}' does not exist.")
 
     elif args.command == "export-model":
+        config = Config(
+            conf_threshold=0.5,
+            yolo_model_path=args.model_path,
+            detector_plugin=args.detector,
+            embedder_plugin=args.embedder
+        )
+        combined_model_path = args.combined_model_path or "models/face.pt"
         fr = FacialRecognition(
-            Config(
-                conf_threshold=0.5,
-                yolo_model_path=args.model_path,
-                detector_plugin=args.detector,
-                embedder_plugin=args.embedder
-            ),
-            combined_model_path=args.combined_model_path
+            config,
+            combined_model_path=combined_model_path
         )
         message = fr.export_model(args.export_path)
         print(message)
@@ -232,12 +236,13 @@ def main():
         if not os.path.exists(args.import_path):
             print(f"[Import Model] File '{args.import_path}' does not exist.")
             sys.exit(1)
-        fr = FacialRecognition.import_model(args.import_path, Config(
+        config = Config(
             conf_threshold=0.5,
             yolo_model_path=args.model_path,
             detector_plugin=args.detector,
             embedder_plugin=args.embedder
-        ))
+        )
+        fr = FacialRecognition.import_model(args.import_path, config)
         print(f"[Import Model] Combined model loaded from {args.import_path}")
 
     else:
