@@ -1,5 +1,3 @@
-# myfacerec/cli.py
-
 import argparse
 import sys
 from PIL import Image
@@ -19,9 +17,9 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    # --------------------
+    # -------------------------------------------------------------------------
     # Register command
-    # --------------------
+    # -------------------------------------------------------------------------
     reg_parser = subparsers.add_parser("register", help="Register a user.")
     reg_parser.add_argument("--user", required=True, help="User ID (unique).")
     reg_parser.add_argument("--images", nargs="+", required=True, help="Paths to one or more face images.")
@@ -35,9 +33,9 @@ def main():
     reg_parser.add_argument("--parallelism", type=int, default=4,
                             help="Number of parallel threads for processing.")
 
-    # --------------------
+    # -------------------------------------------------------------------------
     # Identify command
-    # --------------------
+    # -------------------------------------------------------------------------
     id_parser = subparsers.add_parser("identify", help="Identify faces in an image.")
     id_parser.add_argument("--image", required=True, help="Path to input image.")
     id_parser.add_argument("--threshold", type=float, default=0.6, help="Recognition threshold.")
@@ -49,26 +47,26 @@ def main():
     id_parser.add_argument("--embedder", default=None,
                            help="Name of the embedder plugin to use.")
 
-    # --------------------
+    # -------------------------------------------------------------------------
     # Optional: Export data
-    # --------------------
+    # -------------------------------------------------------------------------
     export_parser = subparsers.add_parser("export-data", help="Export the face data (JSON) to a specified file.")
     export_parser.add_argument("--output", required=True, help="Path to save the exported data.")
 
-    # --------------------
+    # -------------------------------------------------------------------------
     # Optional: Import data
-    # --------------------
+    # -------------------------------------------------------------------------
     import_parser = subparsers.add_parser("import-data", help="Import face data from a JSON file.")
     import_parser.add_argument("--file", required=True, help="Path to the JSON file to import.")
 
-    # --------------------
+    # -------------------------------------------------------------------------
     # Optional: List users
-    # --------------------
+    # -------------------------------------------------------------------------
     list_parser = subparsers.add_parser("list-users", help="List all registered users.")
 
-    # --------------------
+    # -------------------------------------------------------------------------
     # Optional: Delete user
-    # --------------------
+    # -------------------------------------------------------------------------
     delete_parser = subparsers.add_parser("delete-user", help="Delete a registered user.")
     delete_parser.add_argument("--user", required=True, help="User ID to delete.")
 
@@ -78,7 +76,9 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # Handle commands
+    # -------------------------------------------------------------------------
+    # Build the Config / FacialRecognition objects for commands that need them
+    # -------------------------------------------------------------------------
     if args.command in ["register", "identify"]:
         config = Config(
             conf_threshold=args.conf,
@@ -88,6 +88,9 @@ def main():
         )
         fr = FacialRecognition(config)
 
+    # -------------------------------------------------------------------------
+    # Handle each command
+    # -------------------------------------------------------------------------
     if args.command == "register":
         # Batch processing with parallelism
         def process_image(image_path):
@@ -164,6 +167,7 @@ def main():
             print(f"[Delete] User '{args.user}' has been deleted.")
         else:
             print(f"[Delete] User '{args.user}' does not exist.")
+
 
 if __name__ == "__main__":
     main()
