@@ -12,6 +12,7 @@ class Config:
         yolo_model_path=None,
         default_model_url="https://raw.githubusercontent.com/wuhplaptop/facerec/main/face.pt",
         conf_threshold=0.5,
+        similarity_threshold=0.6,  # Added similarity_threshold
         device=None,
         user_data_path="user_faces.json",
         alignment_fn=None,     # Optional face alignment function
@@ -26,6 +27,7 @@ class Config:
         self.yolo_model_path = yolo_model_path or self._default_model_path()
         self.default_model_url = default_model_url
         self.conf_threshold = conf_threshold
+        self.similarity_threshold = similarity_threshold  # Assign it
         self.device = device or self._auto_device()
         self.user_data_path = user_data_path
 
