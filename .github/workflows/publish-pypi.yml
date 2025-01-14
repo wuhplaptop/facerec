@@ -1,5 +1,3 @@
-# .github/workflows/publish-pypi.yml
-
 name: Build, Test, and Publish
 
 on:
@@ -21,67 +19,87 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-latest]  # Explicitly specifying Ubuntu 22.04
-        python-version: ['3.9', '3.10', '3.11']  # Removed '3.8' and '3.7'
+        os: [ubuntu-22.04, windows-latest]
+        python-version: ['3.9', '3.10', '3.11']
     name: Build and Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     steps:
+      # 1. Checkout the repository code
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2. Set up the specified Python version
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Cache pip dependencies
+      # 3. Cache pip dependencies for Unix-based systems
+      - name: Cache pip dependencies (Unix)
+        if: runner.os != 'Windows'
         uses: actions/cache@v3
         with:
-          path: |
-            ~/.cache/pip
-            # For Windows, the cache path might differ
-            ${{ runner.os == 'Windows' && '~\\AppData\\Local\\pip\\Cache' }}
+          path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/setup.py') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      # 4. Cache pip dependencies for Windows systems
+      - name: Cache pip dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v3
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # 5. Install runtime dependencies from requirements.txt
+      - name: Install runtime dependencies
         run: |
           python -m pip install --upgrade pip
           pip install setuptools wheel
-          pip install -e .
           pip install -r requirements.txt
-          pip install flake8 coverage pytest
-        shell: bash
 
+      # 6. Install development dependencies from requirements-dev.txt
+      - name: Install development dependencies
+        run: |
+          pip install -r requirements-dev.txt
+
+      # 7. Lint the codebase using flake8
       - name: Lint with flake8
         run: |
           flake8 myfacerec tests setup.py
-        shell: bash
 
+      # 8. Format the codebase using black
+      - name: Format code with black
+        run: |
+          black myfacerec tests setup.py
+
+      # 9. Build the Python package
       - name: Build Python package
         run: |
           python setup.py sdist bdist_wheel
-        shell: bash
 
+      # 10. Verify the contents of the dist directory
       - name: Verify dist contents
         run: |
-          echo "Checking dist directory contents:"
-          ls dist
-        shell: bash
+          python -c "import os; print(os.listdir('dist'))"
 
+      # 11. Upload build artifacts for later use (e.g., in publish job)
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: built-python-package
           path: dist/**/*
 
+      # 12. Run tests with coverage using pytest and coverage.py
       - name: Run tests with coverage
         run: |
           coverage run -m pytest
           coverage report
           coverage xml
-        shell: bash
 
+      # 13. Upload coverage reports to Codecov
       - name: Upload coverage to Codecov
         if: success()
         uses: codecov/codecov-action@v3
@@ -94,7 +112,7 @@ jobs:
 
   publish:
     needs: build_and_test
-    runs-on: ubuntu-22.04  # Matching the build job's OS
+    runs-on: ubuntu-22.04  # Using a stable and supported OS for publishing
     if: >
       ${{ 
         (
@@ -107,26 +125,30 @@ jobs:
         )
       }}
     steps:
+      # 1. Checkout the repository code
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 2. Download the build artifacts uploaded in the build_and_test job
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: built-python-package
           path: dist
 
+      # 3. Set up Python 3.11 for publishing
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
+      # 4. Install twine for publishing to PyPI
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install twine
-        shell: bash
 
+      # 5. Publish the package to PyPI using twine
       - name: Publish to PyPI with Twine
         run: |
           python -m twine upload dist/* --verbose
