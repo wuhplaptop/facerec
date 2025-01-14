@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from facenet_pytorch import InceptionResnetV1
 from typing import List, Optional, Tuple
 
-from PIL import Image  # Added import to resolve NameError
+from PIL import Image
 
 from .config import Config, logger
 from .detectors import YOLOFaceDetector, FaceDetector
@@ -50,13 +50,10 @@ class FacialRecognition:
         # If no detector, set up YOLO by default
         if detector is None:
             if self.config.yolo_model_path:
-                # Use custom model path (local or URL)
                 path = self.config.yolo_model_path
                 if path.startswith("http"):
-                    # If it's a URL, download it locally
                     path = self._download_custom_model(path)
             else:
-                # Use the default or download if missing
                 path = self._download_model_if_needed(self.config.default_model_url)
 
             yolo_model = YOLO(path)
@@ -67,7 +64,12 @@ class FacialRecognition:
         # If no embedder, use Facenet
         if embedder is None:
             fn_model = InceptionResnetV1(pretrained='vggface2').eval().to(config.device)
-            embedder = FacenetEmbedder(fn_model, device=config.device, alignment_fn=config.alignment_fn)
+            # The next line fails if config.alignment_fn isn't in the installed code
+            embedder = FacenetEmbedder(
+                fn_model,
+                device=config.device,
+                alignment_fn=config.alignment_fn
+            )
         self.embedder = embedder
 
         # If no data store, use JSON
@@ -80,9 +82,6 @@ class FacialRecognition:
         self.logger.info("Initialized with %d users in data store.", len(self.user_data))
 
     def _download_model_if_needed(self, url):
-        """
-        Download the default YOLO model if not present.
-        """
         base_dir = os.path.join(self.config.cache_dir, "models")
         os.makedirs(base_dir, exist_ok=True)
         model_path = os.path.join(base_dir, "face.pt")
@@ -99,9 +98,6 @@ class FacialRecognition:
         return model_path
 
     def _download_custom_model(self, url):
-        """
-        Download a custom YOLO model from the given URL to a local path.
-        """
         base_dir = os.path.join(self.config.cache_dir, "custom_models")
         os.makedirs(base_dir, exist_ok=True)
         filename = os.path.basename(url)
@@ -121,42 +117,32 @@ class FacialRecognition:
     def detect_faces(self, image):
         if self.hooks.before_detect:
             image = self.hooks.before_detect(image)
-
         boxes = self.detector.detect_faces(image)
-
         if self.hooks.after_detect:
             self.hooks.after_detect(boxes)
-
         return boxes
 
     def embed_faces_batch(self, image, boxes):
         if self.hooks.before_embed:
             self.hooks.before_embed(image, boxes)
-
         embeddings = self.embedder.embed_faces_batch(image, boxes)
-
         if self.hooks.after_embed:
             self.hooks.after_embed(embeddings)
-
         return embeddings
 
     def register_user(self, user_id: str, images: List[Image.Image]):
         collected_embeddings = []
         for img in images:
             boxes = self.detect_faces(img)
-            # Only register if there's exactly one face in the image
             if len(boxes) == 1:
                 emb = self.embed_faces_batch(img, boxes)
                 if emb.shape[0] == 1:
                     collected_embeddings.append(emb[0])
-
         if not collected_embeddings:
             return f"[Registration] No valid single-face images found for '{user_id}'."
-
         if user_id not in self.user_data:
             self.user_data[user_id] = []
         self.user_data[user_id].extend(collected_embeddings)
-
         self.data_store.save_user_data(self.user_data)
         return f"[Registration] User '{user_id}' registered with {len(collected_embeddings)} images."
 
@@ -164,14 +150,11 @@ class FacialRecognition:
         boxes = self.detect_faces(image)
         if not boxes:
             return []
-
         embeddings = self.embed_faces_batch(image, boxes)
         results = []
-
         for i, emb in enumerate(embeddings):
             best_match = None
             best_sim = 0.0
-
             for user_id, emb_list in self.user_data.items():
                 valid_embs = [e for e in emb_list if e.shape == emb.shape]
                 if not valid_embs:
@@ -181,7 +164,6 @@ class FacialRecognition:
                 if max_sim > best_sim:
                     best_sim = max_sim
                     best_match = user_id
-
             if best_sim >= threshold:
                 results.append({
                     'box': boxes[i],
@@ -194,7 +176,6 @@ class FacialRecognition:
                     'user_id': 'Unknown',
                     'similarity': float(best_sim)
                 })
-
         return results
 
     def list_users(self):
@@ -208,9 +189,6 @@ class FacialRecognition:
         return False
 
     def update_user_embeddings(self, user_id: str, new_embeddings: List[np.ndarray]):
-        """
-        Add new embeddings to an existing user.
-        """
         if user_id not in self.user_data:
             return False
         self.user_data[user_id].extend(new_embeddings)
@@ -218,9 +196,4 @@ class FacialRecognition:
         return True
 
     def retrain_models(self):
-        """
-        Placeholder for continuous learning logic.
-        Implement retraining or model updates as needed.
-        """
-        # Example: Recompute average embeddings or retrain embedder
         pass
