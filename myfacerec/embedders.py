@@ -4,11 +4,12 @@ import abc
 import numpy as np
 import torch
 from PIL import Image
+from typing import List, Tuple  # <-- Add this line
 
 class FaceEmbedder(abc.ABC):
     """Abstract base class for face embedding."""
     @abc.abstractmethod
-    def embed_faces_batch(self, image, boxes):
+    def embed_faces_batch(self, image, boxes: List[Tuple[int, int, int, int]]):
         pass
 
 
