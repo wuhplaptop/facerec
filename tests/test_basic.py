@@ -6,9 +6,9 @@ import numpy as np
 from PIL import Image
 from unittest.mock import MagicMock, patch
 
-from rolo_rec.config import Config
-from rolo_rec.facial_recognition import FacialRecognition
-from rolo_rec.combined_model import CombinedFacialRecognitionModel
+from myfacerec.config import Config
+from myfacerec.facial_recognition import FacialRecognition
+from myfacerec.combined_model import CombinedFacialRecognitionModel
 import torch
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def mock_facial_recognition(tmp_path):
     - Mocks the __call__ and embed_faces_batch methods to return controlled outputs.
     - Sets up a temporary path for user data.
     """
-    with patch('rolo_rec.combined_model.CombinedFacialRecognitionModel') as MockModel:
+    with patch('myfacerec.combined_model.CombinedFacialRecognitionModel') as MockModel:
         # Create a mock instance of CombinedFacialRecognitionModel
         mock_model_instance = MagicMock(spec=CombinedFacialRecognitionModel)
         
@@ -75,7 +75,6 @@ def test_register_with_face_separate_models(mock_facial_recognition):
     # Ensure the mock methods were called correctly
     fr.combined_model.__call__.assert_called_once_with(img)
     # Note: embed_faces_batch might not be called directly since embeddings are returned from __call__
-    # If embed_faces_batch is used elsewhere, you can add assertions accordingly
 
 def test_identify_known_user_separate_models(mock_facial_recognition):
     """
@@ -135,7 +134,7 @@ def test_export_model_combined_model(tmp_path, mock_facial_recognition):
     assert os.path.exists(export_path), "Exported combined model file does not exist."
 
     # Mock the load_model method to return the same user_embeddings
-    with patch('rolo_rec.combined_model.CombinedFacialRecognitionModel.load_model') as MockLoadModel:
+    with patch('myfacerec.combined_model.CombinedFacialRecognitionModel.load_model') as MockLoadModel:
         # Setup the mock to return a new mock instance with the same user_embeddings
         mock_loaded_model = MagicMock(spec=CombinedFacialRecognitionModel)
         mock_loaded_model.user_embeddings = fr.combined_model.user_embeddings
