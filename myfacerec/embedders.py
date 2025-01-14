@@ -1,4 +1,4 @@
-# embedders.py
+# myfacerec/embedders.py
 
 import abc
 import numpy as np
