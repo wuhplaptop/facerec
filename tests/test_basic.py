@@ -10,6 +10,7 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
+
 # Mock configuration object
 class MockConfig:
     def __init__(self):
@@ -21,11 +22,13 @@ class MockConfig:
         self.cache_dir = "cache"
         self.alignment_fn = None  # Assuming no alignment function for simplicity
 
+
 # Fixtures for tests
 @pytest.fixture
 def mock_config():
     """Mock configuration fixture."""
     return MockConfig()
+
 
 @pytest.fixture
 def mock_detector():
@@ -36,6 +39,7 @@ def mock_detector():
     detector.model.state_dict.return_value = {'mock_key': 'mock_value'}
     return detector
 
+
 @pytest.fixture
 def mock_embedder():
     """Mock FaceEmbedder instance."""
@@ -45,6 +49,7 @@ def mock_embedder():
     embedder.model.state_dict.return_value = {'mock_embedding_key': 'mock_embedding_value'}
     return embedder
 
+
 @pytest.fixture
 def mock_data_store():
     """Mock UserDataStore instance."""
@@ -52,6 +57,7 @@ def mock_data_store():
     data_store.load_user_data.return_value = {}
     data_store.save_user_data.return_value = None
     return data_store
+
 
 @pytest.fixture
 def mock_facial_recognition(mock_config, mock_detector, mock_embedder, mock_data_store):
@@ -64,6 +70,7 @@ def mock_facial_recognition(mock_config, mock_detector, mock_embedder, mock_data
             data_store=mock_data_store
         )
     return fr
+
 
 # Test cases
 def test_facial_recognition_initialization(mock_config, mock_detector, mock_embedder, mock_data_store):
@@ -81,6 +88,7 @@ def test_facial_recognition_initialization(mock_config, mock_detector, mock_embe
     assert fr.detector == mock_detector
     assert fr.embedder == mock_embedder
     assert fr.data_store == mock_data_store
+
 
 def test_register_user(mock_facial_recognition):
     """Test registering a new user."""
@@ -106,6 +114,7 @@ def test_register_user(mock_facial_recognition):
     assert len(mock_facial_recognition.user_data[user_id]) == 1
     assert mock_facial_recognition.user_data[user_id][0].tolist() == [0.1, 0.2, 0.3]
 
+
 def test_identify_user_known(mock_facial_recognition):
     """Test identifying a known user."""
     # Arrange
@@ -116,12 +125,13 @@ def test_identify_user_known(mock_facial_recognition):
     embeddings = np.array([[0.1, 0.2, 0.3]])  # Embedding similar to known user
 
     # Mock cosine_similarity to return perfect similarity
-    with patch("sklearn.metrics.pairwise.cosine_similarity", return_value=np.array([[1.0]])):
+    with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[1.0]])):
         results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
 
     # Assert
     expected_result = [{'user_id': user_id, 'similarity': 1.0}]
     assert results == expected_result
+
 
 def test_identify_user_unknown(mock_facial_recognition):
     """Test identifying an unknown user."""
@@ -133,17 +143,23 @@ def test_identify_user_unknown(mock_facial_recognition):
     embeddings = np.array([[0.4, 0.5, 0.6]])  # Embedding dissimilar to known user
 
     # Mock cosine_similarity to return low similarity
-    with patch("sklearn.metrics.pairwise.cosine_similarity", return_value=np.array([[0.5]])):
+    with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[0.5]])):
         results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
 
     # Assert
     expected_result = [{'user_id': 'Unknown', 'similarity': 0.5}]
     assert results == expected_result
 
+
 def test_export_model(mock_facial_recognition, tmp_path):
     """Test exporting the facial recognition model."""
     # Arrange
     export_path = tmp_path / "exported_model.pt"
+
+    # Populate user_data to ensure it's saved
+    mock_facial_recognition.user_data = {
+        "user1": [np.array([0.1, 0.2, 0.3])]
+    }
 
     # Act
     mock_facial_recognition.export_model(str(export_path))
@@ -151,4 +167,4 @@ def test_export_model(mock_facial_recognition, tmp_path):
     # Assert
     mock_facial_recognition.detector.model.state_dict.assert_called_once()
     mock_facial_recognition.embedder.model.state_dict.assert_called_once()
-    mock_facial_recognition.data_store.save_user_data.assert_called_once()
+    mock_facial_recognition.data_store.save_user_data.assert_called_once_with(mock_facial_recognition.user_data)
