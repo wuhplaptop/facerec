@@ -1,3 +1,5 @@
+# myfacerec/facial_recognition.py
+
 import os
 import requests
 import logging
@@ -5,12 +7,14 @@ import numpy as np
 from ultralytics import YOLO
 from sklearn.metrics.pairwise import cosine_similarity
 from facenet_pytorch import InceptionResnetV1
-from typing import List
+from typing import List, Optional
 
 from .config import Config, logger
 from .detectors import YOLOFaceDetector, FaceDetector
 from .embedders import FacenetEmbedder, FaceEmbedder
 from .data_store import JSONUserDataStore, UserDataStore
+from .hooks import Hooks
+from .plugins.base import PluginManager
 
 class FacialRecognition:
     """
@@ -30,10 +34,18 @@ class FacialRecognition:
     ):
         self.config = config
         self.logger = logging.getLogger(__name__)
+        self.hooks = Hooks()
 
-        # ------------------------------------------------
+        # Initialize Plugin Manager
+        self.plugin_manager = PluginManager()
+
+        # If plugins are specified, load them
+        if config.detector_plugin:
+            detector = self.plugin_manager.load_detector(config.detector_plugin)
+        if config.embedder_plugin:
+            embedder = self.plugin_manager.load_embedder(config.embedder_plugin)
+
         # If no detector, set up YOLO by default
-        # ------------------------------------------------
         if detector is None:
             if self.config.yolo_model_path:
                 # Use custom model path (local or URL)
@@ -48,27 +60,20 @@ class FacialRecognition:
             yolo_model = YOLO(path)
             yolo_model.to(config.device)
             detector = YOLOFaceDetector(yolo_model, conf_threshold=config.conf_threshold)
-
         self.detector = detector
 
-        # ------------------------------------------------
         # If no embedder, use Facenet
-        # ------------------------------------------------
         if embedder is None:
             fn_model = InceptionResnetV1(pretrained='vggface2').eval().to(config.device)
             embedder = FacenetEmbedder(fn_model, device=config.device, alignment_fn=config.alignment_fn)
         self.embedder = embedder
 
-        # ------------------------------------------------
         # If no data store, use JSON
-        # ------------------------------------------------
         if data_store is None:
             data_store = JSONUserDataStore(config.user_data_path)
         self.data_store = data_store
 
-        # ------------------------------------------------
         # Load user data
-        # ------------------------------------------------
         self.user_data = self.data_store.load_user_data()
         self.logger.info("Initialized with %d users in data store.", len(self.user_data))
 
@@ -76,7 +81,7 @@ class FacialRecognition:
         """
         Download the default YOLO model if not present.
         """
-        base_dir = os.path.expanduser("~/.myfacerec")
+        base_dir = os.path.join(self.config.cache_dir, "models")
         os.makedirs(base_dir, exist_ok=True)
         model_path = os.path.join(base_dir, "face.pt")
 
@@ -95,7 +100,7 @@ class FacialRecognition:
         """
         Download a custom YOLO model from the given URL to a local path.
         """
-        base_dir = os.path.expanduser("~/.myfacerec/custom_models")
+        base_dir = os.path.join(self.config.cache_dir, "custom_models")
         os.makedirs(base_dir, exist_ok=True)
         filename = os.path.basename(url)
         model_path = os.path.join(base_dir, filename)
@@ -112,28 +117,28 @@ class FacialRecognition:
         return model_path
 
     def detect_faces(self, image):
-        if self.config.before_detect:
-            image = self.config.before_detect(image)
+        if self.hooks.before_detect:
+            image = self.hooks.before_detect(image)
 
         boxes = self.detector.detect_faces(image)
 
-        if self.config.after_detect:
-            self.config.after_detect(boxes)
+        if self.hooks.after_detect:
+            self.hooks.after_detect(boxes)
 
         return boxes
 
     def embed_faces_batch(self, image, boxes):
-        if self.config.before_embed:
-            self.config.before_embed(image, boxes)
+        if self.hooks.before_embed:
+            self.hooks.before_embed(image, boxes)
 
         embeddings = self.embedder.embed_faces_batch(image, boxes)
 
-        if self.config.after_embed:
-            self.config.after_embed(embeddings)
+        if self.hooks.after_embed:
+            self.hooks.after_embed(embeddings)
 
         return embeddings
 
-    def register_user(self, user_id: str, images: List):
+    def register_user(self, user_id: str, images: List[Image.Image]):
         collected_embeddings = []
         for img in images:
             boxes = self.detect_faces(img)
@@ -153,7 +158,7 @@ class FacialRecognition:
         self.data_store.save_user_data(self.user_data)
         return f"[Registration] User '{user_id}' registered with {len(collected_embeddings)} images."
 
-    def identify_user(self, image, threshold=0.6):
+    def identify_user(self, image: Image.Image, threshold=0.6):
         boxes = self.detect_faces(image)
         if not boxes:
             return []
@@ -189,3 +194,31 @@ class FacialRecognition:
                 })
 
         return results
+
+    def list_users(self):
+        return list(self.user_data.keys())
+
+    def delete_user(self, user_id: str):
+        if user_id in self.user_data:
+            del self.user_data[user_id]
+            self.data_store.save_user_data(self.user_data)
+            return True
+        return False
+
+    def update_user_embeddings(self, user_id: str, new_embeddings: List[np.ndarray]):
+        """
+        Add new embeddings to an existing user.
+        """
+        if user_id not in self.user_data:
+            return False
+        self.user_data[user_id].extend(new_embeddings)
+        self.data_store.save_user_data(self.user_data)
+        return True
+
+    def retrain_models(self):
+        """
+        Placeholder for continuous learning logic.
+        Implement retraining or model updates as needed.
+        """
+        # Example: Recompute average embeddings or retrain embedder
+        pass
