@@ -49,10 +49,9 @@ class FacialRecognition:
         # Initialize Combined Model if provided
         if combined_model_path:
             self.combined_model = CombinedFacialRecognitionModel(
-                yolo_model_path=config.yolo_model_path or "yolov8n.pt",
                 device=config.device
             )
-            self.combined_model = CombinedFacialRecognitionModel.load_model(combined_model_path)
+            self.combined_model = CombinedFacialRecognitionModel.load_model(combined_model_path, device=config.device)
             self.logger.info("Initialized with combined YOLO and Facenet model.")
         else:
             # If plugins are specified, load them
@@ -127,7 +126,7 @@ class FacialRecognition:
 
         return model_path
 
-    def detect_faces(self, image):
+    def detect_faces(self, image: Image.Image):
         if hasattr(self, 'combined_model'):
             # Use combined model for detection and embedding
             results = self.combined_model(image)
@@ -141,7 +140,7 @@ class FacialRecognition:
                 self.hooks.execute_after_detect(boxes)
             return boxes, None
 
-    def embed_faces_batch(self, image, boxes):
+    def embed_faces_batch(self, image: Image.Image, boxes: List[Tuple[int, int, int, int]]):
         if hasattr(self, 'combined_model'):
             # Embeddings are already obtained from the combined model
             # This method can return the embeddings alongside boxes
@@ -279,6 +278,6 @@ class FacialRecognition:
         Returns:
             FacialRecognition: Initialized FacialRecognition instance with the imported model.
         """
-        combined_model = CombinedFacialRecognitionModel.load_model(import_path)
+        combined_model = CombinedFacialRecognitionModel.load_model(import_path, device=config.device)
         fr = cls(config, combined_model_path=import_path)
         return fr
