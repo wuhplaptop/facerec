@@ -1,132 +1,332 @@
-# rolo-rec
+# **rolo-rec**  
+> *Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.*
 
-A modular **face recognition** library that uses **YOLO** (via [ultralytics](https://pypi.org/project/ultralytics/)) for face detection and **Facenet** ([facenet-pytorch](https://pypi.org/project/facenet-pytorch/)) for facial embeddings.  
-Despite being published under the **distribution name** `rolo-rec`, the **import path** in Python code is `myfacerec.*`.  
+## **Table of Contents**
 
-## 1. Installation
+1. [Overview](#overview)  
+2. [Key Features](#key-features)  
+3. [Project Structure](#project-structure)  
+4. [Installation](#installation)  
+5. [CLI Usage](#cli-usage)  
+6. [Detailed Modules & Functions](#detailed-modules--functions)  
+   1. [\_\_init\_\_.py](#1-__init__py)  
+   2. [cli.py](#2-clipy)  
+   3. [config.py](#3-configpy)  
+   4. [facial_recognition.py](#4-facial_recognitionpy)  
+   5. [detectors.py](#5-detectorspy)  
+   6. [embedders.py](#6-embedderspy)  
+   7. [data_store.py](#7-data_storepy)  
+   8. [hooks.py](#8-hookspy)  
+   9. [plugins/](#9-plugins)  
+7. [Testing](#testing)  
+8. [Contributing](#contributing)  
+9. [License](#license)
 
+---
+
+## **Overview**
+
+**rolo-rec** is a modular facial recognition library built on **YOLO** (for face detection) and **Facenet** (for embedding and similarity checks). It provides:
+
+- A **command-line interface** (`rolo-rec`) to register and identify faces.
+- A **plug-and-play** architecture for detectors, embedders, data stores.
+- **Hooks** that allow you to inject custom logic at various stages (detection, embedding, etc.).
+- **Configurable** YOLO model paths and device selection (CPU/GPU).
+- **JSON-based** data storage out of the box, with potential for plugin-based data store solutions.
+
+---
+
+## **Key Features**
+
+1. **CLI for Easy Usage**  
+   - **Register** faces with `rolo-rec register`.
+   - **Identify** faces with `rolo-rec identify`.
+   - **List, Import, Export** face embeddings data.
+
+2. **Modular Architecture**  
+   - **Detectors**: YOLO for face bounding boxes, or custom plugin detectors.
+   - **Embedders**: Facenet for face embeddings, or custom plugin embedders.
+
+3. **Hooks System**  
+   - Register hooks (`before_detect`, `after_detect`, etc.) to apply transformations or logging at specific pipeline stages.
+
+4. **Flexible Configuration**  
+   - **`Config`** object sets YOLO model paths, confidence thresholds, alignment functions, plugin references, etc.
+
+5. **Plugin Manager**  
+   - Dynamically load custom detectors or embedders from your setup’s entry points.
+
+---
+
+## **Project Structure**
+
+A typical `rolo-rec` project layout:
+
+```
+rolo-rec/
+├── myfacerec/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── data_store.py
+│   ├── detectors.py
+│   ├── embedders.py
+│   ├── facial_recognition.py
+│   ├── hooks.py
+│   └── plugins/
+│       ├── __init__.py
+│       ├── base.py
+│       └── sample_plugin.py
+├── tests/
+│   └── test_basic.py
+├── setup.py
+└── requirements.txt (optional)
+```
+
+---
+
+## **Installation**
+
+1. **Local Development**  
+   ```bash
+   git clone https://github.com/.../rolo-rec.git
+   cd rolo-rec
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install --upgrade pip
+   pip install -e .  # Editable install
+   ```
+
+2. **Production Install from Source**  
+   ```bash
+   python setup.py sdist bdist_wheel
+   pip install dist/rolo_rec-0.3.0-py3-none-any.whl
+   ```
+
+3. **PyPI (if published)**  
+   ```bash
+   pip install rolo-rec
+   ```
+
+---
+
+## **CLI Usage**
+
+Once installed, you can run:
 ```bash
-pip install rolo-rec
+rolo-rec --help
 ```
+This provides help on subcommands. The main subcommands:
 
-- Requires **Python 3.7+**.
-- Installs `myfacerec` as the internal package namespace, but the library is published under `rolo-rec`.
-
-## 2. Usage
-
-### 2.1 Command-Line Interface
-
-When you install **rolo-rec**, it provides a CLI command called **`rolo-rec`** (if configured in your `setup.py` `entry_points`). You can:
-
-1. **Register** a user:
+1. **register**  
+   Register a user with one or more images:
    ```bash
-   rolo-rec register --user Alice --images alice1.jpg alice2.jpg --conf 0.75
+   rolo-rec register --user Alice --images alice1.jpg alice2.jpg --conf 0.5
    ```
-   - **`--user Alice`**: The unique user identifier.
-   - **`--images alice1.jpg alice2.jpg`**: One or more paths to images containing that user’s face.
-   - **`--conf 0.75`**: Optional YOLO detection confidence threshold (default 0.5).
+   - `--user`: Unique username.
+   - `--images`: List of file paths to face images.
+   - `--conf`: YOLO confidence threshold (default 0.5).
 
-2. **Identify** faces:
+2. **identify**  
+   Identify faces in an image:
    ```bash
-   rolo-rec identify --image group_photo.jpg --threshold 0.65 --conf 0.6
+   rolo-rec identify --image group_photo.jpg --threshold 0.6 --conf 0.5
    ```
-   - **`--image group_photo.jpg`**: The image in which to detect faces.
-   - **`--threshold 0.65`**: Cosine similarity threshold for deciding if a face is recognized.
-   - **`--conf 0.6`**: YOLO detection confidence threshold.
+   - `--image`: Path to the image containing faces.
+   - `--threshold`: Similarity threshold for deciding if a face is recognized.
 
-Sample output:
-```
-Face 1: box=(50, 40, 120, 120), user_id='Alice', similarity=0.72
-Face 2: box=(130, 50, 180, 120), user_id='Unknown', similarity=0.55
-```
+3. **export-data**  
+   Export the JSON data (face embeddings) to a file:
+   ```bash
+   rolo-rec export-data --output shared_faces.json
+   ```
 
-### 2.2 Python API
+4. **import-data**  
+   Import face embeddings from a JSON file:
+   ```bash
+   rolo-rec import-data --file shared_faces.json
+   ```
 
-You can also import the library in your own Python scripts. Even though you installed `rolo-rec`, **the import path** is `myfacerec`:
+5. **list-users**  
+   List all registered user IDs:
+   ```bash
+   rolo-rec list-users
+   ```
 
+6. **delete-user**  
+   Delete a registered user from the data store:
+   ```bash
+   rolo-rec delete-user --user Alice
+   ```
+
+---
+
+## **Detailed Modules & Functions**
+
+Below is a **per-file** overview of each major class and function:
+
+### **1. `__init__.py`**
+Exports key classes so external code can do:
 ```python
-from myfacerec.config import Config
-from myfacerec.facial_recognition import FacialRecognition
-from PIL import Image
-
-# 1. Create a Config object, customizing thresholds or data paths
-config = Config(
-    user_data_path="user_faces.json",  # default storage for embeddings
-    conf_threshold=0.75               # YOLO detection confidence threshold
-)
-
-# 2. Initialize the main class
-fr = FacialRecognition(config)
-
-# 3. Register a user with multiple images
-img1 = Image.open("alice1.jpg").convert("RGB")
-img2 = Image.open("alice2.jpg").convert("RGB")
-message = fr.register_user("Alice", [img1, img2])
-print(message)  # e.g. "[Registration] User 'Alice' registered with 2 images."
-
-# 4. Identify faces in another image
-test_img = Image.open("group_photo.jpg").convert("RGB")
-results = fr.identify_user(test_img, threshold=0.65)
-
-for i, r in enumerate(results):
-    print(f"Face {i+1}: box={r['box']}, user_id={r['user_id']}, similarity={r['similarity']:.2f}")
+from myfacerec import FacialRecognition, Config, YOLOFaceDetector, ...
 ```
+- **`FacialRecognition`**: The main orchestrator class from `facial_recognition.py`.
+- **`Config`**: The config class from `config.py`.
+- **`YOLOFaceDetector`, `FacenetEmbedder`, `JSONUserDataStore`, `Hooks`**: Exposed for quick usage.
 
-**Notes**:
-- **`conf_threshold`** (YOLO detection) and `threshold` (for face recognition similarity) are separate. 
-- By default, embeddings are stored in a JSON file (`user_faces.json`). Each user can have multiple stored embeddings.
+### **2. `cli.py`**
+Implements the **rolo-rec** CLI:
 
-## 3. Features and Architecture
+- **`main()`**: Top-level entry point for subcommands.
+- **Subparsers**:
+  - **register**: Registers a user with images.
+  - **identify**: Identifies faces in an image.
+  - **export-data**/**import-data**: Manage JSON data export/import.
+  - **list-users**/**delete-user**: Manage users.
 
-- **YOLO-based Face Detection**  
-  Uses a `.pt` model for face detection via [ultralytics](https://pypi.org/project/ultralytics/).  
-- **Facenet Embedding**  
-  [facenet-pytorch](https://pypi.org/project/facenet-pytorch/) computes a 512-d vector for each face.  
-- **Pluggable Design**  
-  The library has separate modules for detection, embedding, and data storage. You can swap them for your own custom backends by creating new classes.  
-- **JSON Data Store**  
-  By default, user embeddings are stored in `user_faces.json`.  
-- **Multiple Embeddings per User**  
-  In `register_user()`, each image with exactly one face is converted to an embedding. They accumulate for robust recognition.  
+**Key workflow**:
+1. Parse arguments (`argparse`).
+2. Create a `Config` object with the user’s specified thresholds, model paths, etc.
+3. Construct a `FacialRecognition` object.
+4. Call the relevant methods: `register_user(...)`, `identify_user(...)`, etc.
 
-## 4. Testing
+### **3. `config.py`**
+Central config object, **`Config`**, that sets:
+- **`yolo_model_path`**: Local or URL path to YOLO model.
+- **`default_model_url`**: Backup YOLO model if none is specified.
+- **`conf_threshold`**: YOLO confidence threshold.
+- **`device`**: Defaults to “cuda” if GPU is available, else “cpu”.
+- **`user_data_path`**: JSON file path for embeddings.
+- **`alignment_fn`**: Optional function to align or transform images before embedding.
+- **`before_detect`, `after_detect`, `before_embed`, `after_embed`**: Optional config-based hooks.
+- **`detector_plugin`, `embedder_plugin`**: For plugin-based detectors/embedders.
+- **`cache_dir`**: Base directory to cache downloaded YOLO models.
 
-If you cloned the source repository, you’ll find a `tests/` folder. For example:
+### **4. `facial_recognition.py`**
+**Core** orchestrator class **`FacialRecognition`**. Key responsibilities:
 
-```python
-# tests/test_basic.py
+1. **Constructor**:
+   - Accepts `Config`, plus optional `detector`, `embedder`, `data_store`.
+   - Loads YOLO if no custom detector is provided.
+   - Loads FaceNet if no custom embedder is provided.
+   - Loads a JSON user data store if none is provided.
+   - Maintains a `self.user_data` dictionary from the data store.
 
-import os
-import pytest
-from PIL import Image
-from myfacerec.config import Config
-from myfacerec.facial_recognition import FacialRecognition
+2. **Face Detection** (`detect_faces`):
+   - Calls the `FaceDetector` object’s `detect_faces(image)`.
+   - Optionally calls hooks (`before_detect`, `after_detect`).
 
-def test_register_no_faces(tmp_path):
-    user_data_path = str(tmp_path / "test_faces.json")
-    config = Config(user_data_path=user_data_path, conf_threshold=0.99)  # Very high => no detection
-    fr = FacialRecognition(config)
+3. **Embedding** (`embed_faces_batch`):
+   - Calls the `FaceEmbedder` object’s `embed_faces_batch(image, boxes)`.
+   - Optionally calls hooks (`before_embed`, `after_embed`).
 
-    # Create a blank image
-    img = Image.new("RGB", (100, 100), color="white")
-    msg = fr.register_user("NoFaceUser", [img])
+4. **Registering** (`register_user(user_id, images)`):
+   - For each image, tries to detect exactly one face.
+   - Embeds the face, stores the resulting vector(s) in `self.user_data[user_id]`.
+   - Saves the updated user data to disk (JSON by default).
 
-    assert "No valid single-face images" in msg
-    assert not fr.user_data.get("NoFaceUser")
-```
+5. **Identifying** (`identify_user(image, threshold)`):
+   - Detects faces, then for each face embedding, computes similarity vs. known embeddings.
+   - If best similarity > threshold, recognized. Otherwise, “Unknown.”
 
-You can run the tests using:
+6. **List / Delete / Update**:
+   - `list_users()`, `delete_user(user_id)`, `update_user_embeddings(user_id, new_embeddings)`.
+
+### **5. `detectors.py`**
+- **`FaceDetector`** (abstract): Must implement `detect_faces(image)`.
+- **`YOLOFaceDetector`**: Default YOLO-based face detection:
+  1. Runs YOLO on the image.
+  2. Filters out bounding boxes with `cls == 0` (person class) and `conf >= conf_threshold`.
+  3. Returns a list of `(x1, y1, x2, y2)` bounding box tuples.
+
+### **6. `embedders.py`**
+- **`FaceEmbedder`** (abstract): Must implement `embed_faces_batch(image, boxes)`.
+- **`FacenetEmbedder`**: 
+  1. Crops and resizes each face to `(160,160)`.
+  2. Optionally calls an `alignment_fn(face)` if provided.
+  3. Normalizes the pixel data, converts to a PyTorch tensor.
+  4. Passes the batch through FaceNet to get embeddings as a NumPy array.
+
+### **7. `data_store.py`**
+- **`UserDataStore`** (abstract).
+- **`JSONUserDataStore`**:  
+  - Reads/writes face embeddings in JSON (`user_faces.json` by default).
+  - On load, reconstitutes embeddings as NumPy arrays.
+  - On save, converts them to lists for JSON serialization.
+
+### **8. `hooks.py`**
+A **simple** hook management system:
+
+- `Hooks.before_detect`, `Hooks.after_detect`, etc. store lists of callables.
+- `Hooks.execute_before_detect(image)` calls each function in `before_detect`, passing the `image`.
+- Useful for custom logic (e.g., image transformations, logging, metrics).
+
+### **9. `plugins/`**
+- **`base.py`**: Has a `PluginManager` class to dynamically load detectors, embedders, or data stores via `pkg_resources` entry points.
+- **`sample_plugin.py`**: Example plugin showing a `SampleDetector` that does nothing (returns empty bounding boxes).  
+
+---
+
+## **Testing**
+
+Your test suite in `tests/` typically includes:
+
+- **`test_basic.py`**: Basic end-to-end tests for registration and identification:
+  1. **`test_register_no_faces`**: Ensures the library handles images with no faces.
+  2. **`test_register_with_face`**: Mocks face detection/embedding to confirm registration works.
+  3. **`test_identify_unknown`**: Confirms that images with no recognized embeddings yield no results.
+  4. **`test_identify_known_user`**: Mocks detection/embedding so a known user is recognized.
+  5. **`test_plugin_loading`**: Ensures custom plugin detectors can be loaded.
+
+**Running tests**:
 
 ```bash
 pytest tests/
 ```
 
-## 5. Summary
+**Common Issues**:
+- **AttributeError** (e.g., `'list' object has no attribute 'shape'`): Fix your mocks to return NumPy arrays.
+- **Floating-Point** issues (e.g. `1.0000008344650269` vs. `1.0`): Use `pytest.approx(1.0, abs=1e-6)` to allow small numeric deviations.
 
-**rolo-rec** is published under that PyPI package name, but when you import in code, it appears as **`myfacerec.*`**. The CLI command is also `rolo-rec` if you configured it in your `setup.py` entry points. 
+---
 
-- Install: `pip install rolo-rec`
-- CLI usage: `rolo-rec register ...`, `rolo-rec identify ...`
-- Python usage: `from myfacerec.facial_recognition import FacialRecognition`  
+## **Contributing**
 
-This flexible approach ensures you can easily register new users, detect faces in images, and integrate advanced face recognition capabilities into your projects.
+1. **Fork & Clone**:  
+   ```bash
+   git clone https://github.com/YourUser/rolo-rec.git
+   cd rolo-rec
+   ```
+2. **Create a Feature Branch**:  
+   ```bash
+   git checkout -b feature/your-feature
+   ```
+3. **Install & Test**:  
+   ```bash
+   pip install -e .
+   pip install -r requirements-dev.txt
+   pytest tests/
+   ```
+4. **Open a Pull Request**.
+
+**Coding Guidelines**:
+- Follow PEP8 for code style.
+- Use docstrings for each function explaining arguments and return values.
+- Write or update tests for new features or bugfixes.
+
+---
+
+## **License**
+
+This project is distributed under the terms of the **MIT License** (or whichever license you choose). See [LICENSE](LICENSE) for details.
+
+---
+
+# **Summary**
+
+- **rolo-rec** is a powerful, modular facial recognition library combining YOLO-based detection and FaceNet-based embeddings, offering a robust CLI and an extensible plugin system.
+- The **`FacialRecognition`** class orchestrates the entire pipeline, from detection to embedding and user data management.
+- Configuration is handled by **`Config`**, which includes crucial attributes like `alignment_fn`, device selection, YOLO paths, confidence thresholds, etc.
+- The code is extensively **testable** via the `tests/` folder, using **pytest**.
+
+We hope this README helps you get started quickly and effectively with **rolo-rec**! Feel free to open issues, contribute new plugins, or add enhancements like advanced data stores or alignment steps.
