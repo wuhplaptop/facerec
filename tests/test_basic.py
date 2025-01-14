@@ -161,10 +161,18 @@ def test_export_model(mock_facial_recognition, tmp_path):
         "user1": [np.array([0.1, 0.2, 0.3])]
     }
 
+    # Define mock return values for state_dict
+    yolo_state_dict = {'yolo_layer': 'yolo_weights'}
+    facenet_state_dict = {'facenet_layer': 'facenet_weights'}
+
+    # Assign the predefined return values to the mocks
+    mock_facial_recognition.detector.model.state_dict.return_value = yolo_state_dict
+    mock_facial_recognition.embedder.model.state_dict.return_value = facenet_state_dict
+
     # Expected state to be saved
     expected_state = {
-        'yolo_state_dict': mock_facial_recognition.detector.model.state_dict(),
-        'facenet_state_dict': mock_facial_recognition.embedder.model.state_dict(),
+        'yolo_state_dict': yolo_state_dict,
+        'facenet_state_dict': facenet_state_dict,
         'user_embeddings': {
             "user1": [np.array([0.1, 0.2, 0.3])]
         },
