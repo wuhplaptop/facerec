@@ -230,12 +230,14 @@ class FacialRecognition:
             for user_id, emb_list in self.user_data.items():
                 if not emb_list:
                     continue
-                emb_array = np.stack(emb_list)  # Shape: (num_user_embeddings, embedding_dim)
-
+                try:
+                    emb_array = np.stack(emb_list)  # Shape: (num_user_embeddings, embedding_dim)
+                except ValueError as e:
+                    self.logger.error(f"Error stacking embeddings for user {user_id}: {e}")
+                    continue
                 if emb_array.shape[1] != emb.shape[0]:
                     self.logger.error(f"Embedding dimension mismatch for user '{user_id}': {emb_array.shape[1]} vs {emb.shape[0]}")
                     continue
-
                 sims = cosine_similarity([emb], emb_array)  # Shape: (1, num_user_embeddings)
                 max_sim = sims.max()
                 if max_sim > best_sim:
