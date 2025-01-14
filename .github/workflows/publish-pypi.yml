@@ -47,27 +47,34 @@ jobs:
           if exist rolo_rec.egg-info rmdir /s /q rolo_rec.egg-info
         shell: cmd
 
-      # 5. Build the Python package (source and wheel distributions)
+      # 5. Download 'face.pt' if not already present
+      - name: Download face.pt
+        run: |
+          mkdir models
+          curl -L -o models/face.pt https://raw.githubusercontent.com/wuhplaptop/facerec/main/face.pt
+        shell: bash
+
+      # 6. Build the Python package (source and wheel distributions)
       - name: Build Python package
         run: |
           python setup.py sdist bdist_wheel
         shell: cmd
 
-      # 6. Verify the contents of the dist directory
+      # 7. Verify the contents of the dist directory
       - name: Verify dist contents
         run: |
           echo "Checking dist directory contents:"
           dir dist
         shell: cmd
 
-      # 7. Upload build artifacts for use in the publish job
+      # 8. Upload build artifacts for use in the publish job
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: built-python-package
           path: dist/**/*
 
-      # 8. Run tests to ensure package integrity
+      # 9. Run tests to ensure package integrity
       - name: Run tests
         run: |
           REM Install the built package
