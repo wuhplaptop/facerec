@@ -14,7 +14,7 @@ class Config:
         conf_threshold=0.5,
         device=None,
         user_data_path="user_faces.json",
-        alignment_fn=None,     # <--- Keep or set default to None
+        alignment_fn=None,     # Optional face alignment function
         before_detect=None,
         after_detect=None,
         before_embed=None,
@@ -23,14 +23,14 @@ class Config:
         embedder_plugin=None,
         cache_dir=None
     ):
-        self.yolo_model_path = yolo_model_path
+        self.yolo_model_path = yolo_model_path or self._default_model_path()
         self.default_model_url = default_model_url
         self.conf_threshold = conf_threshold
         self.device = device or self._auto_device()
         self.user_data_path = user_data_path
 
         # Optional hooks
-        self.alignment_fn = alignment_fn   # <--- ensure we set it
+        self.alignment_fn = alignment_fn
         self.before_detect = before_detect
         self.after_detect = after_detect
         self.before_embed = before_embed
@@ -46,6 +46,13 @@ class Config:
     def _auto_device(self):
         import torch
         return "cuda" if torch.cuda.is_available() else "cpu"
+
+    def _default_model_path(self):
+        """
+        Returns the default model path, which is 'models/face.pt' within the package.
+        """
+        import pkg_resources
+        return pkg_resources.resource_filename(__name__, 'models/face.pt')
 
 
 # Basic logger setup (global)
