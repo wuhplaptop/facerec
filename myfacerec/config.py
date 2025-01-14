@@ -1,4 +1,7 @@
+# myfacerec/config.py
+
 import logging
+import os
 
 class Config:
     """
@@ -15,7 +18,10 @@ class Config:
         before_detect=None,
         after_detect=None,
         before_embed=None,
-        after_embed=None
+        after_embed=None,
+        detector_plugin=None,
+        embedder_plugin=None,
+        cache_dir=None
     ):
         self.yolo_model_path = yolo_model_path
         self.default_model_url = default_model_url
@@ -24,11 +30,17 @@ class Config:
         self.user_data_path = user_data_path
 
         # Optional hooks
-        self.alignment_fn = alignment_fn
         self.before_detect = before_detect
         self.after_detect = after_detect
         self.before_embed = before_embed
         self.after_embed = after_embed
+
+        # Plugins
+        self.detector_plugin = detector_plugin
+        self.embedder_plugin = embedder_plugin
+
+        # Caching
+        self.cache_dir = cache_dir or os.path.expanduser("~/.myfacerec/cache")
 
     def _auto_device(self):
         import torch
