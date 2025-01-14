@@ -9,6 +9,7 @@ import numpy as np
 import json
 import os
 from pathlib import Path
+from typing import Optional, List, Tuple  # Import Optional and other necessary type hints
 
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(self, yolo_model_path: Optional[str], device: str = 'cpu'):
@@ -17,6 +18,7 @@ class CombinedFacialRecognitionModel(nn.Module):
         if yolo_model_path:
             self.yolo = YOLO(yolo_model_path)
             self.yolo.to(device)
+            self.yolo.model_path = yolo_model_path  # Store model path for saving
         else:
             self.yolo = None  # Placeholder or alternative initialization
 
@@ -27,12 +29,12 @@ class CombinedFacialRecognitionModel(nn.Module):
         self.user_embeddings = {}
         self.device = device
 
-    def forward(self, image):
+    def forward(self, image: Image.Image) -> List[Tuple[Tuple[int, int, int, int], np.ndarray]]:
         """
         Perform face detection and embedding extraction.
 
         Args:
-            image (PIL.Image or torch.Tensor): Input image.
+            image (PIL.Image): Input image.
 
         Returns:
             List of tuples: Each tuple contains bounding box coordinates and the corresponding embedding.
@@ -42,10 +44,10 @@ class CombinedFacialRecognitionModel(nn.Module):
             image = image.permute(1, 2, 0).cpu().numpy()
             image = Image.fromarray((image * 255).astype('uint8'))
 
+        boxes = []
         if self.yolo:
             # Detect faces using YOLO
             detections = self.yolo(image)
-            boxes = []
             for result in detections:
                 for box in result.boxes:
                     conf = box.conf.item()
@@ -53,9 +55,6 @@ class CombinedFacialRecognitionModel(nn.Module):
                     if conf >= 0.5 and cls == 0:  # Assuming class 0 is 'face'
                         x1, y1, x2, y2 = box.xyxy[0].tolist()
                         boxes.append((int(x1), int(y1), int(x2), int(y2)))
-        else:
-            # Placeholder for alternative detection methods
-            boxes = []
 
         embeddings = []
         for box in boxes:
