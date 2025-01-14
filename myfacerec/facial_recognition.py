@@ -18,6 +18,9 @@ from .plugins.base import PluginManager
 from .combined_model import CombinedFacialRecognitionModel  # Import the combined model
 
 import torch
+from ultralytics import YOLO  # Ensure YOLO is imported
+from facenet_pytorch import InceptionResnetV1  # Ensure InceptionResnetV1 is imported
+
 
 class FacialRecognition:
     """
@@ -46,7 +49,7 @@ class FacialRecognition:
         # Initialize Combined Model if provided
         if combined_model_path:
             self.combined_model = CombinedFacialRecognitionModel(
-                yolo_model_path=config.yolo_model_path,
+                yolo_model_path=config.yolo_model_path or "yolov8n.pt",
                 device=config.device
             )
             self.combined_model = CombinedFacialRecognitionModel.load_model(combined_model_path)
