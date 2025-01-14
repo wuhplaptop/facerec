@@ -3,7 +3,7 @@ import requests
 import logging
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any  # Added Dict and Any
 
 from PIL import Image
 
@@ -13,11 +13,11 @@ from .embedders import FacenetEmbedder, FaceEmbedder
 from .data_store import JSONUserDataStore, UserDataStore
 from .hooks import Hooks
 from .plugins.base import PluginManager
-from .combined_model import CombinedFacialRecognitionModel  # Import the combined model
+from .combined_model import CombinedFacialRecognitionModel
 
 import torch
-from ultralytics import YOLO  # Ensure YOLO is imported
-from facenet_pytorch import InceptionResnetV1  # Ensure InceptionResnetV1 is imported
+from ultralytics import YOLO
+from facenet_pytorch import InceptionResnetV1
 
 
 class FacialRecognition:
