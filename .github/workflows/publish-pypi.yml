@@ -34,7 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install setuptools wheel
-          pip install -r requirements.txt  # Install runtime dependencies
+          pip install -r requirements.txt
         shell: cmd
 
       # 4. Clean previous builds to ensure a fresh build environment
@@ -71,7 +71,7 @@ jobs:
           REM Install the built package
           for %%f in (dist\*.whl) do pip install %%f || exit 1
           REM Install testing dependencies
-          pip install -r requirements-dev.txt  # Install development dependencies
+          pip install -r requirements-dev.txt
           REM Run tests
           pytest tests/
         shell: cmd
