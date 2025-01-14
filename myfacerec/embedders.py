@@ -37,6 +37,12 @@ class FacenetEmbedder(FaceEmbedder):
                 # Normalize the face image
                 face_np = np.array(face).astype(np.float32) / 255.0
                 face_np = (face_np - 0.5) / 0.5
+
+                # Check shape validity
+                if face_np.shape != (160, 160, 3):
+                    logger.error(f"Invalid face shape: {face_np.shape}. Expected (160, 160, 3). Skipping.")
+                    continue
+
                 face_tensor = torch.from_numpy(face_np).permute(2, 0, 1).float()
                 face_tensors.append(face_tensor)
             except Exception as e:
@@ -49,6 +55,7 @@ class FacenetEmbedder(FaceEmbedder):
         # Perform embedding generation
         try:
             batch = torch.stack(face_tensors).to(self.device)
+            logger.info(f"Processing batch of size {len(face_tensors)} for embeddings.")
             with torch.no_grad():
                 embeddings = self.model(batch).cpu().numpy()
             logger.info(f"Generated embeddings for {len(embeddings)} faces.")
