@@ -1,6 +1,5 @@
 # myfacerec/plugins/base.py
 
-import importlib
 import pkg_resources
 import logging
 from typing import Type
