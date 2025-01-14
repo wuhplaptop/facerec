@@ -1,5 +1,3 @@
-# facial_recognition.py
-
 import os
 import requests
 import logging
@@ -33,30 +31,51 @@ class FacialRecognition:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
+        # ------------------------------------------------
         # If no detector, set up YOLO by default
+        # ------------------------------------------------
         if detector is None:
-            path = config.yolo_model_path or self._download_model_if_needed(config.default_model_url)
+            if self.config.yolo_model_path:
+                # Use custom model path (local or URL)
+                path = self.config.yolo_model_path
+                if path.startswith("http"):
+                    # If it's a URL, download it locally
+                    path = self._download_custom_model(path)
+            else:
+                # Use the default or download if missing
+                path = self._download_model_if_needed(self.config.default_model_url)
+
             yolo_model = YOLO(path)
             yolo_model.to(config.device)
             detector = YOLOFaceDetector(yolo_model, conf_threshold=config.conf_threshold)
+
         self.detector = detector
 
+        # ------------------------------------------------
         # If no embedder, use Facenet
+        # ------------------------------------------------
         if embedder is None:
             fn_model = InceptionResnetV1(pretrained='vggface2').eval().to(config.device)
             embedder = FacenetEmbedder(fn_model, device=config.device, alignment_fn=config.alignment_fn)
         self.embedder = embedder
 
+        # ------------------------------------------------
         # If no data store, use JSON
+        # ------------------------------------------------
         if data_store is None:
             data_store = JSONUserDataStore(config.user_data_path)
         self.data_store = data_store
 
+        # ------------------------------------------------
         # Load user data
+        # ------------------------------------------------
         self.user_data = self.data_store.load_user_data()
         self.logger.info("Initialized with %d users in data store.", len(self.user_data))
 
     def _download_model_if_needed(self, url):
+        """
+        Download the default YOLO model if not present.
+        """
         base_dir = os.path.expanduser("~/.myfacerec")
         os.makedirs(base_dir, exist_ok=True)
         model_path = os.path.join(base_dir, "face.pt")
@@ -69,6 +88,26 @@ class FacialRecognition:
                 for chunk in r.iter_content(chunk_size=8192):
                     f.write(chunk)
             self.logger.info("Default model saved to %s", model_path)
+
+        return model_path
+
+    def _download_custom_model(self, url):
+        """
+        Download a custom YOLO model from the given URL to a local path.
+        """
+        base_dir = os.path.expanduser("~/.myfacerec/custom_models")
+        os.makedirs(base_dir, exist_ok=True)
+        filename = os.path.basename(url)
+        model_path = os.path.join(base_dir, filename)
+
+        if not os.path.exists(model_path):
+            self.logger.info("Downloading custom YOLO model from %s", url)
+            r = requests.get(url, stream=True)
+            r.raise_for_status()
+            with open(model_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            self.logger.info("Custom model saved to %s", model_path)
 
         return model_path
 
@@ -98,6 +137,7 @@ class FacialRecognition:
         collected_embeddings = []
         for img in images:
             boxes = self.detect_faces(img)
+            # Only register if there's exactly one face in the image
             if len(boxes) == 1:
                 emb = self.embed_faces_batch(img, boxes)
                 if emb.shape[0] == 1:
