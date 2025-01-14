@@ -1,6 +1,6 @@
 # myfacerec/hooks.py
 
-from typing import Callable, List, Optional
+from typing import Callable, List
 
 class Hooks:
     def __init__(self):
