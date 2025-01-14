@@ -7,7 +7,9 @@ import numpy as np
 from ultralytics import YOLO
 from sklearn.metrics.pairwise import cosine_similarity
 from facenet_pytorch import InceptionResnetV1
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+from PIL import Image  # Added import to resolve NameError
 
 from .config import Config, logger
 from .detectors import YOLOFaceDetector, FaceDetector
