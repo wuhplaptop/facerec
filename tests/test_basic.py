@@ -1,5 +1,5 @@
 # tests/test_basic.py
-
+import rolo_rec
 import os
 import pytest
 import numpy as np
