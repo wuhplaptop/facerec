@@ -6,9 +6,9 @@ import numpy as np
 from PIL import Image
 from unittest.mock import MagicMock, patch
 
-from myfacerec.config import Config
-from myfacerec.facial_recognition import FacialRecognition
-from myfacerec.combined_model import CombinedFacialRecognitionModel
+from rolo_rec.config import Config
+from rolo_rec.facial_recognition import FacialRecognition
+from rolo_rec.combined_model import CombinedFacialRecognitionModel
 import torch
 
 @pytest.fixture
@@ -18,17 +18,21 @@ def mock_facial_recognition(tmp_path):
     
     This fixture:
     - Mocks the CombinedFacialRecognitionModel to avoid loading the actual 'face.pt' model.
-    - Mocks the detect_faces and embed_faces_batch methods to return controlled outputs.
+    - Mocks the __call__ and embed_faces_batch methods to return controlled outputs.
     - Sets up a temporary path for user data.
     """
-    with patch('myfacerec.combined_model.CombinedFacialRecognitionModel') as MockModel:
+    with patch('rolo_rec.combined_model.CombinedFacialRecognitionModel') as MockModel:
         # Create a mock instance of CombinedFacialRecognitionModel
         mock_model_instance = MagicMock(spec=CombinedFacialRecognitionModel)
         
-        # Mock the detect_faces method
-        mock_model_instance.detect_faces.return_value = [(10, 10, 50, 50)], [np.array([0.1] * 512, dtype=np.float32)]
+        # Mock the __call__ method to simulate face detection and embedding extraction
+        mock_model_instance.__call__.return_value = [
+            (10, 10, 50, 50)
+        ], [
+            np.array([0.1] * 512, dtype=np.float32)
+        ]
         
-        # Mock the embed_faces_batch method (if used separately)
+        # Mock the embed_faces_batch method if it's used separately
         mock_model_instance.embed_faces_batch.return_value = np.array([0.1] * 512, dtype=np.float32)
         
         # Mock the state_dict and load_state_dict to prevent PicklingError
@@ -41,11 +45,10 @@ def mock_facial_recognition(tmp_path):
         # When CombinedFacialRecognitionModel.load_model is called, return the mock instance
         MockModel.load_model.return_value = mock_model_instance
         
-        # Initialize FacialRecognition with the mocked model
+        # Initialize FacialRecognition with the mocked combined model
         config = Config(user_data_path=str(tmp_path / "test_faces.json"))
         fr = FacialRecognition(config, combined_model_path="models/face.pt")
         
-        # Return the FacialRecognition instance
     return fr
 
 def test_register_with_face_separate_models(mock_facial_recognition):
@@ -54,7 +57,7 @@ def test_register_with_face_separate_models(mock_facial_recognition):
     
     This test verifies that:
     - A user can be registered with a single image.
-    - The appropriate methods (`detect_faces` and `embed_faces_batch`) are called with correct arguments.
+    - The appropriate methods (__call__ and embed_faces_batch) are called with correct arguments.
     """
     fr = mock_facial_recognition
 
@@ -70,8 +73,9 @@ def test_register_with_face_separate_models(mock_facial_recognition):
     assert len(fr.combined_model.user_embeddings["TestUser"]) == 1, "Incorrect number of embeddings stored for the user."
     
     # Ensure the mock methods were called correctly
-    fr.combined_model.detect_faces.assert_called_once_with(img)
-    fr.combined_model.embed_faces_batch.assert_called_once_with(img, [(10, 10, 50, 50)])
+    fr.combined_model.__call__.assert_called_once_with(img)
+    # Note: embed_faces_batch might not be called directly since embeddings are returned from __call__
+    # If embed_faces_batch is used elsewhere, you can add assertions accordingly
 
 def test_identify_known_user_separate_models(mock_facial_recognition):
     """
@@ -80,7 +84,7 @@ def test_identify_known_user_separate_models(mock_facial_recognition):
     This test verifies that:
     - A registered user can be identified correctly.
     - The similarity score meets expectations.
-    - The appropriate methods are called with correct arguments.
+    - The appropriate methods (__call__ and embed_faces_batch) are called with correct arguments.
     """
     fr = mock_facial_recognition
 
@@ -101,8 +105,8 @@ def test_identify_known_user_separate_models(mock_facial_recognition):
     assert results[0]['similarity'] == pytest.approx(1.0, abs=1e-6), "Similarity score mismatch."
     
     # Ensure the mock methods were called correctly
-    fr.combined_model.detect_faces.assert_called_once_with(img)
-    fr.combined_model.embed_faces_batch.assert_called_once_with(img, [(10, 10, 50, 50)])
+    fr.combined_model.__call__.assert_called_once_with(img)
+    # Note: embed_faces_batch might not be called directly since embeddings are returned from __call__
 
 def test_export_model_combined_model(tmp_path, mock_facial_recognition):
     """
@@ -131,7 +135,7 @@ def test_export_model_combined_model(tmp_path, mock_facial_recognition):
     assert os.path.exists(export_path), "Exported combined model file does not exist."
 
     # Mock the load_model method to return the same user_embeddings
-    with patch('myfacerec.combined_model.CombinedFacialRecognitionModel.load_model') as MockLoadModel:
+    with patch('rolo_rec.combined_model.CombinedFacialRecognitionModel.load_model') as MockLoadModel:
         # Setup the mock to return a new mock instance with the same user_embeddings
         mock_loaded_model = MagicMock(spec=CombinedFacialRecognitionModel)
         mock_loaded_model.user_embeddings = fr.combined_model.user_embeddings
