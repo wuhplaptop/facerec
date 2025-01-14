@@ -19,7 +19,7 @@ class FacenetEmbedder(FaceEmbedder):
         self.alignment_fn = alignment_fn
         self.model.eval()
 
-    def embed_faces_batch(self, image, boxes):
+    def embed_faces_batch(self, image: Image.Image, boxes: List[Tuple[int, int, int, int]]):
         if not boxes:
             return np.array([])
 
