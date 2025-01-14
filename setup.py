@@ -16,9 +16,9 @@ setup(
         "scikit-learn",
         "ultralytics",
         "facenet-pytorch",
-        "pkg_resources",
+        # Removed "pkg_resources" as it is part of setuptools
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.9",  # Updated to match dependencies' requirements
     entry_points={
         "console_scripts": [
             # This means users can now run `rolo-rec` from the command line
