@@ -1,4 +1,4 @@
-# data_store.py
+# myfacerec/data_store.py
 
 import abc
 import os
