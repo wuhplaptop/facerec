@@ -1,5 +1,3 @@
-# tests/test_basic.py
-
 import os
 import pytest
 from PIL import Image
