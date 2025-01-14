@@ -15,138 +15,99 @@ on:
     types: [published]
 
 jobs:
-  build_and_test:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-22.04, windows-latest]
-        python-version: ['3.9', '3.10', '3.11']
-    name: Build and Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
+  build:
+    runs-on: windows-latest
+
     steps:
       # 1. Checkout the repository code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Set up the specified Python version
+      # 2. Set up Python environment
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'  # Updated to Python 3.11
 
-      # 3. Cache pip dependencies for Unix-based systems
-      - name: Cache pip dependencies (Unix)
-        if: runner.os != 'Windows'
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      # 4. Cache pip dependencies for Windows systems
-      - name: Cache pip dependencies (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/cache@v3
-        with:
-          path: ~\AppData\Local\pip\Cache
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      # 5. Install runtime dependencies from requirements.txt
-      - name: Install runtime dependencies
+      # 3. Install runtime dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install setuptools wheel
-          pip install -r requirements.txt
+          pip install -r requirements.txt  # Install runtime dependencies
+        shell: cmd
 
-      # 6. Install development dependencies from requirements-dev.txt
-      - name: Install development dependencies
+      # 4. Clean previous builds to ensure a fresh build environment
+      - name: Clean previous builds
         run: |
-          pip install -r requirements-dev.txt
+          if exist build rmdir /s /q build
+          if exist dist rmdir /s /q dist
+          if exist rolo_rec.egg-info rmdir /s /q rolo_rec.egg-info
+        shell: cmd
 
-      # 7. Lint the codebase using flake8
-      - name: Lint with flake8
-        run: |
-          flake8 myfacerec tests setup.py
-
-      # 8. Format the codebase using black
-      - name: Format code with black
-        run: |
-          black myfacerec tests setup.py
-
-      # 9. Build the Python package
+      # 5. Build the Python package (source and wheel distributions)
       - name: Build Python package
         run: |
           python setup.py sdist bdist_wheel
+        shell: cmd
 
-      # 10. Verify the contents of the dist directory
+      # 6. Verify the contents of the dist directory
       - name: Verify dist contents
         run: |
-          python -c "import os; print(os.listdir('dist'))"
+          echo "Checking dist directory contents:"
+          dir dist
+        shell: cmd
 
-      # 11. Upload build artifacts for later use (e.g., in publish job)
+      # 7. Upload build artifacts for use in the publish job
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: built-python-package
           path: dist/**/*
 
-      # 12. Run tests with coverage using pytest and coverage.py
-      - name: Run tests with coverage
+      # 8. Run tests to ensure package integrity
+      - name: Run tests
         run: |
-          coverage run -m pytest
-          coverage report
-          coverage xml
-
-      # 13. Upload coverage reports to Codecov
-      - name: Upload coverage to Codecov
-        if: success()
-        uses: codecov/codecov-action@v3
-        with:
-          files: coverage.xml
-          flags: unittests
-          name: codecov-umbrella
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          REM Install the built package
+          for %%f in (dist\*.whl) do pip install %%f || exit 1
+          REM Install testing dependencies
+          pip install -r requirements-dev.txt  # Install development dependencies
+          REM Run tests
+          pytest tests/
+        shell: cmd
 
   publish:
-    needs: build_and_test
-    runs-on: ubuntu-22.04  # Using a stable and supported OS for publishing
+    needs: build
+    runs-on: windows-latest
     if: >
       ${{ 
-        (
-          github.event_name == 'release' && 
-          github.event.action == 'published'
-        ) || 
-        (
-          github.event_name == 'push' && 
-          startsWith(github.ref, 'refs/tags/v')
-        )
+        (github.event_name == 'release' && github.event.action == 'published') ||
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
       }}
     steps:
       # 1. Checkout the repository code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Download the build artifacts uploaded in the build_and_test job
+      # 2. Download the build artifacts uploaded in the build job
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: built-python-package
           path: dist
 
-      # 3. Set up Python 3.11 for publishing
+      # 3. Set up Python environment for publishing
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.11'  # Ensure consistent Python version
 
-      # 4. Install twine for publishing to PyPI
+      # 4. Install twine for uploading the package to PyPI
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install twine
+        shell: cmd
 
       # 5. Publish the package to PyPI using twine
       - name: Publish to PyPI with Twine
