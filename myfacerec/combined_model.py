@@ -6,28 +6,23 @@ from ultralytics import YOLO
 from facenet_pytorch import InceptionResnetV1
 from PIL import Image
 import numpy as np
-import json
 import os
-from pathlib import Path
-from typing import Optional, List, Tuple  # Import Optional and other necessary type hints
+from typing import Optional, List, Tuple
 
 class CombinedFacialRecognitionModel(nn.Module):
-    def __init__(self, yolo_model_path: Optional[str], device: str = 'cpu'):
+    def __init__(self, device: str = 'cpu'):
         super(CombinedFacialRecognitionModel, self).__init__()
-        # Initialize YOLO model if path is provided
-        if yolo_model_path:
-            self.yolo = YOLO(yolo_model_path)
-            self.yolo.to(device)
-            self.yolo.model_path = yolo_model_path  # Store model path for saving
-        else:
-            self.yolo = None  # Placeholder or alternative initialization
+        self.device = device
+
+        # Initialize YOLO model
+        self.yolo = YOLO()  # YOLO will be loaded via state_dict
+        self.yolo.to(self.device)
 
         # Initialize Facenet model
-        self.facenet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
+        self.facenet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
 
         # User embeddings: Dict[str, List[np.ndarray]]
         self.user_embeddings = {}
-        self.device = device
 
     def forward(self, image: Image.Image) -> List[Tuple[Tuple[int, int, int, int], np.ndarray]]:
         """
@@ -45,16 +40,15 @@ class CombinedFacialRecognitionModel(nn.Module):
             image = Image.fromarray((image * 255).astype('uint8'))
 
         boxes = []
-        if self.yolo:
-            # Detect faces using YOLO
-            detections = self.yolo(image)
-            for result in detections:
-                for box in result.boxes:
-                    conf = box.conf.item()
-                    cls = int(box.cls.item())
-                    if conf >= 0.5 and cls == 0:  # Assuming class 0 is 'face'
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        boxes.append((int(x1), int(y1), int(x2), int(y2)))
+        # Detect faces using YOLO
+        detections = self.yolo(image)
+        for result in detections:
+            for box in result.boxes:
+                conf = box.conf.item()
+                cls = int(box.cls.item())
+                if conf >= 0.5 and cls == 0:  # Assuming class 0 is 'face'
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    boxes.append((int(x1), int(y1), int(x2), int(y2)))
 
         embeddings = []
         for box in boxes:
@@ -77,42 +71,31 @@ class CombinedFacialRecognitionModel(nn.Module):
         """
         # Prepare state dictionary
         state = {
-            'yolo_state_dict': self.yolo.model.state_dict() if self.yolo else None,
+            'yolo_state_dict': self.yolo.model.state_dict(),
             'facenet_state_dict': self.facenet.state_dict(),
             'user_embeddings': self.user_embeddings,
             'device': self.device,
-            'yolo_model_path': self.yolo.model_path if self.yolo else None  # Save model path if available
+            'yolo_model_path': self.yolo.model_path if hasattr(self.yolo, 'model_path') else None
         }
         torch.save(state, save_path)
 
     @classmethod
-    def load_model(cls, load_path: str):
+    def load_model(cls, load_path: str, device: str = 'cpu'):
         """
         Load the combined model and user embeddings from a .pt file.
 
         Args:
             load_path (str): Path to the .pt model.
+            device (str): Device to load the model on.
 
         Returns:
             CombinedFacialRecognitionModel: Loaded model.
         """
-        state = torch.load(load_path, map_location='cpu')
-        device = state.get('device', 'cpu')
-        yolo_model_path = state.get('yolo_model_path', 'yolov8n.pt')  # Retrieve yolo_model_path
-
-        # Initialize with yolo_model_path if available
-        model = cls(yolo_model_path=yolo_model_path, device=device)
-
-        # Load YOLO state_dict if YOLO was initialized
-        if model.yolo and state['yolo_state_dict']:
-            model.yolo.model.load_state_dict(state['yolo_state_dict'])
-
-        # Load Facenet state_dict
+        state = torch.load(load_path, map_location=device)
+        model = cls(device=device)
+        model.yolo.load_state_dict(state['yolo_state_dict'])
         model.facenet.load_state_dict(state['facenet_state_dict'])
-
-        # Load user embeddings
         model.user_embeddings = state['user_embeddings']
-
         model.to(device)
         model.eval()
         return model
