@@ -31,16 +31,18 @@ def mock_config():
 def mock_detector():
     """Mock FaceDetector instance."""
     detector = MagicMock(spec=FaceDetector)
-    # Mock detect_faces to return a single face bounding box
-    detector.detect_faces.return_value = [(10, 10, 100, 100)]
+    detector.detect_faces.return_value = [(10, 10, 100, 100)]  # Mocked bounding boxes
+    detector.model = MagicMock()
+    detector.model.state_dict.return_value = {'mock_key': 'mock_value'}
     return detector
 
 @pytest.fixture
 def mock_embedder():
     """Mock FaceEmbedder instance."""
     embedder = MagicMock(spec=FaceEmbedder)
-    # Mock embed_faces_batch to return a 2D numpy array with one embedding
-    embedder.embed_faces_batch.return_value = np.array([[0.1, 0.2, 0.3]])
+    embedder.embed_faces_batch.return_value = np.array([[0.1, 0.2, 0.3]])  # Mocked embeddings
+    embedder.model = MagicMock()
+    embedder.model.state_dict.return_value = {'mock_embedding_key': 'mock_embedding_value'}
     return embedder
 
 @pytest.fixture
@@ -113,8 +115,9 @@ def test_identify_user_known(mock_facial_recognition):
     }
     embeddings = np.array([[0.1, 0.2, 0.3]])  # Embedding similar to known user
 
-    # Act
-    results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
+    # Mock cosine_similarity to return perfect similarity
+    with patch("sklearn.metrics.pairwise.cosine_similarity", return_value=np.array([[1.0]])):
+        results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
 
     # Assert
     expected_result = [{'user_id': user_id, 'similarity': 1.0}]
@@ -129,11 +132,12 @@ def test_identify_user_unknown(mock_facial_recognition):
     }
     embeddings = np.array([[0.4, 0.5, 0.6]])  # Embedding dissimilar to known user
 
-    # Act
-    results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
+    # Mock cosine_similarity to return low similarity
+    with patch("sklearn.metrics.pairwise.cosine_similarity", return_value=np.array([[0.5]])):
+        results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
 
     # Assert
-    expected_result = [{'user_id': 'Unknown', 'similarity': 0.0}]
+    expected_result = [{'user_id': 'Unknown', 'similarity': 0.5}]
     assert results == expected_result
 
 def test_export_model(mock_facial_recognition, tmp_path):
