@@ -14,6 +14,7 @@ from .embedders import FacenetEmbedder, FaceEmbedder
 from .data_store import JSONUserDataStore, UserDataStore
 
 from ultralytics import YOLO  # Updated import
+from facenet_pytorch import InceptionResnetV1  # Added import
 
 import torch
 
@@ -97,13 +98,14 @@ class FacialRecognition:
         Returns:
             FacenetEmbedder: Initialized FacenetEmbedder instance.
         """
-        # Initialize Facenet model
-        facenet_model = torch.hub.load('pytorch/vision:v0.10.0', 'inception_resnet_v1', pretrained='vggface2')
-        facenet_model.eval()
-        facenet_model.to(self.config.device)
-        self.logger.info("Facenet model loaded on device %s.", self.config.device)
-
-        return FacenetEmbedder(facenet_model, device=self.config.device, alignment_fn=self.config.alignment_fn)
+        try:
+            # Initialize Facenet model directly using facenet_pytorch
+            facenet_model = InceptionResnetV1(pretrained='vggface2').eval().to(self.config.device)
+            self.logger.info("Facenet model loaded on device %s.", self.config.device)
+            return FacenetEmbedder(facenet_model, device=self.config.device, alignment_fn=self.config.alignment_fn)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Facenet embedder: {e}")
+            raise
 
     def _download_model(self, url: str) -> str:
         """
@@ -300,7 +302,7 @@ class FacialRecognition:
                 conf_threshold=config.conf_threshold
             )
             embedder = FacenetEmbedder(
-                torch.hub.load('pytorch/vision:v0.10.0', 'inception_resnet_v1', pretrained='vggface2'),
+                InceptionResnetV1(pretrained='vggface2').eval().to(config.device),
                 device=config.device,
                 alignment_fn=config.alignment_fn
             )
