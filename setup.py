@@ -33,13 +33,17 @@ setup(
             "rolo-rec=myfacerec.cli:main",
         ],
         "rolo_rec.detectors": [
-            # Add custom detectors here or in plugins
+            # Register custom detectors here
+            # Example:
+            # "yolo_detector=myfacerec.plugins.sample_plugin:SampleDetector",
         ],
         "rolo_rec.embedders": [
-            # Add custom embedders here or in plugins
+            "sample_embedder=myfacerec.plugins.sample_plugin:SampleEmbedder",
         ],
         "rolo_rec.data_stores": [
-            # Add custom data stores here or in plugins
+            # Register custom data stores here
+            # Example:
+            # "json_data_store=myfacerec.plugins.sample_plugin:SampleDataStore",
         ],
     },
     classifiers=[
