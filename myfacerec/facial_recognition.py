@@ -202,17 +202,17 @@ class FacialRecognition:
         self.logger.info(message)
         return message
 
-    def identify_user(self, embeddings: np.ndarray, threshold: float = 0.6) -> List[Dict[str, Any]]:
+    def identify_user(self, embeddings: np.ndarray) -> List[Dict[str, Any]]:
         """
         Identify users based on the provided embeddings.
 
         Args:
             embeddings (np.ndarray): Array of face embeddings to identify. Shape: (num_faces, embedding_dim)
-            threshold (float): Similarity threshold for recognition.
 
         Returns:
-            List[Dict[str, Any]]: List of identification results with bounding boxes, user IDs, and similarity scores.
+            List[Dict[str, Any]]: List of identification results with user IDs and similarity scores.
         """
+        threshold = self.config.similarity_threshold  # Use threshold from Config
         if embeddings.ndim != 2:
             self.logger.error(f"Embeddings should be a 2D array, got {embeddings.ndim}D array instead.")
             raise ValueError("Embeddings should be a 2D array.")
@@ -265,7 +265,8 @@ class FacialRecognition:
                 'yolo_state_dict': self.detector.model.state_dict(),
                 'facenet_state_dict': self.embedder.model.state_dict(),
                 'user_embeddings': {user_id: emb_list for user_id, emb_list in self.user_data.items()},
-                'device': self.config.device
+                'device': self.config.device,
+                'similarity_threshold': self.config.similarity_threshold  # Include similarity_threshold
             }
             torch.save(state, save_path)
             self.logger.info(f"Model and user data exported to {save_path}.")
@@ -303,6 +304,7 @@ class FacialRecognition:
             fr.detector.model.load_state_dict(state['yolo_state_dict'])
             fr.embedder.model.load_state_dict(state['facenet_state_dict'])
             fr.user_data = {user_id: [np.array(e) for e in emb_list] for user_id, emb_list in state['user_embeddings'].items()}
+            fr.config.similarity_threshold = state.get('similarity_threshold', fr.config.similarity_threshold)  # Update similarity_threshold if present
             fr.logger.info(f"Model imported from {import_path}.")
             return fr
         except KeyError as e:
