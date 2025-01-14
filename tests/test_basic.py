@@ -38,7 +38,7 @@ def mock_facial_recognition(tmp_path):
         # Mock the save_model method to do nothing
         mock_model_instance.save_model.return_value = None
         
-        # When CombinedFacialRecognitionModel is instantiated, return the mock instance
+        # When CombinedFacialRecognitionModel.load_model is called, return the mock instance
         MockModel.load_model.return_value = mock_model_instance
         
         # Initialize FacialRecognition with the mocked model
