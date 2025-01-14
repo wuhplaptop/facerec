@@ -140,23 +140,33 @@ class FacialRecognition:
             return embeddings
 
     def register_user(self, user_id: str, images: List[Image.Image]) -> str:
-        collected_embeddings = []
-        for img in images:
-            boxes, embeddings = self.detect_faces(img)
-            if len(boxes) == 1 and embeddings:
-                collected_embeddings.append(embeddings[0])
-        if not collected_embeddings:
-            return f"[Registration] No valid single-face images found for '{user_id}'."
-        if hasattr(self, 'combined_model'):
-            if user_id not in self.combined_model.user_embeddings:
-                self.combined_model.user_embeddings[user_id] = []
-            self.combined_model.user_embeddings[user_id].extend(collected_embeddings)
+    collected_embeddings = []
+    for img in images:
+        boxes, embeddings = self.detect_faces(img)
+        logger.info(f"Detected {len(boxes)} faces.")
+        if len(boxes) == 1 and embeddings:
+            logger.info(f"Embedding shape: {embeddings[0].shape}")
+            collected_embeddings.append(embeddings[0])
+        elif len(boxes) > 1:
+            logger.warning("Multiple faces detected. Skipping image.")
         else:
-            if user_id not in self.user_data:
-                self.user_data[user_id] = []
-            self.user_data[user_id].extend(collected_embeddings)
-            self.data_store.save_user_data(self.user_data)
-        return f"[Registration] User '{user_id}' registered with {len(collected_embeddings)} images."
+            logger.warning("No faces detected or embeddings generated. Skipping image.")
+
+    if not collected_embeddings:
+        return f"[Registration] No valid single-face images found for '{user_id}'."
+
+    # Store embeddings
+    if hasattr(self, 'combined_model'):
+        if user_id not in self.combined_model.user_embeddings:
+            self.combined_model.user_embeddings[user_id] = []
+        self.combined_model.user_embeddings[user_id].extend(collected_embeddings)
+    else:
+        if user_id not in self.user_data:
+            self.user_data[user_id] = []
+        self.user_data[user_id].extend(collected_embeddings)
+        self.data_store.save_user_data(self.user_data)
+
+    return f"[Registration] User '{user_id}' registered with {len(collected_embeddings)} embeddings."
 
     def identify_user(self, image: Image.Image, threshold=0.6) -> List[Dict[str, Any]]:
         boxes, embeddings = self.detect_faces(image)
