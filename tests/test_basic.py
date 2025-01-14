@@ -1,5 +1,3 @@
-# tests/test_basic.py
-
 import os
 import pytest
 import numpy as np
@@ -18,15 +16,15 @@ def mock_facial_recognition(tmp_path):
     
     This fixture:
     - Mocks the CombinedFacialRecognitionModel to avoid loading the actual 'face.pt' model.
-    - Mocks the __call__ and embed_faces_batch methods to return controlled outputs.
+    - Mocks the forward and embed_faces_batch methods to return controlled outputs.
     - Sets up a temporary path for user data.
     """
     with patch('myfacerec.combined_model.CombinedFacialRecognitionModel') as MockModel:
         # Create a mock instance of CombinedFacialRecognitionModel
         mock_model_instance = MagicMock(spec=CombinedFacialRecognitionModel)
         
-        # Mock the __call__ method to simulate face detection and embedding extraction
-        mock_model_instance.__call__.return_value = [
+        # Mock the forward method to simulate face detection and embedding extraction
+        mock_model_instance.forward.return_value = [
             (10, 10, 50, 50)
         ], [
             np.array([0.1] * 512, dtype=np.float32)
@@ -73,8 +71,8 @@ def test_register_with_face_separate_models(mock_facial_recognition):
     assert len(fr.combined_model.user_embeddings["TestUser"]) == 1, "Incorrect number of embeddings stored for the user."
     
     # Ensure the mock methods were called correctly
-    fr.combined_model.__call__.assert_called_once_with(img)
-    # Note: embed_faces_batch might not be called directly since embeddings are returned from __call__
+    fr.combined_model.forward.assert_called_once_with(img)
+    # Note: embed_faces_batch might not be called directly since embeddings are returned from forward
 
 def test_identify_known_user_separate_models(mock_facial_recognition):
     """
@@ -104,8 +102,8 @@ def test_identify_known_user_separate_models(mock_facial_recognition):
     assert results[0]['similarity'] == pytest.approx(1.0, abs=1e-6), "Similarity score mismatch."
     
     # Ensure the mock methods were called correctly
-    fr.combined_model.__call__.assert_called_once_with(img)
-    # Note: embed_faces_batch might not be called directly since embeddings are returned from __call__
+    fr.combined_model.forward.assert_called_once_with(img)
+    # Note: embed_faces_batch might not be called directly since embeddings are returned from forward
 
 def test_export_model_combined_model(tmp_path, mock_facial_recognition):
     """
