@@ -2,6 +2,7 @@
 
 import logging
 import os
+import pkg_resources
 
 class Config:
     """
@@ -53,7 +54,6 @@ class Config:
         """
         Returns the default model path, which is 'models/face.pt' within the package.
         """
-        import pkg_resources
         return pkg_resources.resource_filename(__name__, 'models/face.pt')
 
 
