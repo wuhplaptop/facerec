@@ -8,14 +8,15 @@ from PIL import Image
 import numpy as np
 import os
 from typing import Optional, List, Tuple
+import pkg_resources
 
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(self, device: str = 'cpu'):
         super(CombinedFacialRecognitionModel, self).__init__()
         self.device = device
 
-        # Initialize YOLO model
-        self.yolo = YOLO()  # YOLO will be loaded via state_dict
+        # Initialize YOLO model without loading weights yet
+        self.yolo = YOLO()
         self.yolo.to(self.device)
 
         # Initialize Facenet model
@@ -93,9 +94,17 @@ class CombinedFacialRecognitionModel(nn.Module):
         """
         state = torch.load(load_path, map_location=device)
         model = cls(device=device)
-        model.yolo.load_state_dict(state['yolo_state_dict'])
+
+        # Load YOLO state_dict
+        if state['yolo_state_dict']:
+            model.yolo.model.load_state_dict(state['yolo_state_dict'])
+
+        # Load Facenet state_dict
         model.facenet.load_state_dict(state['facenet_state_dict'])
+
+        # Load user embeddings
         model.user_embeddings = state['user_embeddings']
+
         model.to(device)
         model.eval()
         return model
