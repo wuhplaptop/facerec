@@ -4,10 +4,11 @@ from setuptools import setup, find_packages
 
 setup(
     name="rolo-rec",
-    version="0.4.0",  # Incremented version
+    version="0.4.0",
     description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
     author="wuhp",
     packages=find_packages(),
+    include_package_data=True,  # Ensures package data from MANIFEST.in is included
     install_requires=[
         "requests",
         "numpy",
@@ -16,8 +17,16 @@ setup(
         "scikit-learn",
         "ultralytics",
         "facenet-pytorch",
-        # Removed "pkg_resources" as it is part of setuptools
+        "torchvision<0.18.0,>=0.17.0",
+        "tqdm<5.0.0,>=4.0.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest",
+            "pluggy<2,>=1.5",
+            "iniconfig",
+        ],
+    },
     python_requires=">=3.9",
     entry_points={
         "console_scripts": [
