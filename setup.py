@@ -3,8 +3,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="rolo-rec",  # Renamed to "rolo-rec" for PyPI
-    version="0.3.0",
+    name="rolo-rec",
+    version="0.4.0",  # Incremented version
     description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
     author="wuhp",
     packages=find_packages(),
@@ -18,22 +18,18 @@ setup(
         "facenet-pytorch",
         # Removed "pkg_resources" as it is part of setuptools
     ],
-    python_requires=">=3.9",  # Updated to match dependencies' requirements
+    python_requires=">=3.9",
     entry_points={
         "console_scripts": [
-            # This means users can now run `rolo-rec` from the command line
-            "rolo-rec=myfacerec.cli:main", 
+            "rolo-rec=myfacerec.cli:main",
         ],
         "rolo_rec.detectors": [
-            # Example: 'yolo = myfacerec.detectors:YOLOFaceDetector',
             # Add custom detectors here or in plugins
         ],
         "rolo_rec.embedders": [
-            # Example: 'facenet = myfacerec.embedders:FacenetEmbedder',
             # Add custom embedders here or in plugins
         ],
         "rolo_rec.data_stores": [
-            # Example: 'json = myfacerec.data_store:JSONUserDataStore',
             # Add custom data stores here or in plugins
         ],
     },
