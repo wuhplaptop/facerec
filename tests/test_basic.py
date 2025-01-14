@@ -126,7 +126,7 @@ def test_identify_user_known(mock_facial_recognition):
 
     # Mock cosine_similarity to return perfect similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[1.0]])):
-        results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
+        results = mock_facial_recognition.identify_user(embeddings)  # Removed threshold=0.6
 
     # Assert
     expected_result = [{'user_id': user_id, 'similarity': 1.0}]
@@ -144,7 +144,7 @@ def test_identify_user_unknown(mock_facial_recognition):
 
     # Mock cosine_similarity to return low similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[0.5]])):
-        results = mock_facial_recognition.identify_user(embeddings, threshold=0.6)
+        results = mock_facial_recognition.identify_user(embeddings)  # Removed threshold=0.6
 
     # Assert
     expected_result = [{'user_id': 'Unknown', 'similarity': 0.5}]
@@ -176,7 +176,8 @@ def test_export_model(mock_facial_recognition, tmp_path):
         'user_embeddings': {
             "user1": [np.array([0.1, 0.2, 0.3])]
         },
-        'device': mock_facial_recognition.config.device
+        'device': mock_facial_recognition.config.device,
+        'similarity_threshold': mock_facial_recognition.config.similarity_threshold  # Include similarity_threshold
     }
 
     # Mock torch.save to verify it's called correctly
@@ -208,6 +209,9 @@ def test_export_model(mock_facial_recognition, tmp_path):
 
         # Assert device
         assert saved_state['device'] == mock_facial_recognition.config.device, "Device does not match."
+
+        # Assert similarity_threshold
+        assert saved_state['similarity_threshold'] == mock_facial_recognition.config.similarity_threshold, "Similarity threshold does not match."
 
         # Assert user_embeddings
         assert "user1" in saved_state['user_embeddings'], "User1 not found in user_embeddings."
