@@ -15,9 +15,13 @@ on:
     types: [published]
 
 jobs:
-  build:
-    runs-on: windows-latest
-
+  build_and_test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11']
+    name: Build and Test on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -25,30 +29,43 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install Python dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            # For Windows, the cache path might differ
+            ${{ runner.os == 'Windows' && '~\\AppData\\Local\\pip\\Cache' }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/setup.py') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install setuptools wheel
+          pip install -e .
+          pip install -r requirements.txt
+          pip install flake8 coverage pytest
+        shell: bash
 
-      - name: Clean previous builds
+      - name: Lint with flake8
         run: |
-          if exist build rmdir /s /q build
-          if exist dist rmdir /s /q dist
-          if exist rolo_rec.egg-info rmdir /s /q rolo_rec.egg-info
-        shell: cmd
+          flake8 myfacerec tests setup.py
+        shell: bash
 
       - name: Build Python package
         run: |
           python setup.py sdist bdist_wheel
-        shell: cmd
+        shell: bash
 
       - name: Verify dist contents
         run: |
           echo "Checking dist directory contents:"
-          dir dist
-        shell: cmd
+          ls dist
+        shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -56,25 +73,37 @@ jobs:
           name: built-python-package
           path: dist/**/*
 
-      - name: Run tests
+      - name: Run tests with coverage
         run: |
-          REM Install the built package
-          for %%f in (dist\*.whl) do pip install %%f || exit 1
-          REM Install testing dependencies
-          pip install pytest
-          REM Run tests
-          pytest tests/
-        shell: cmd
+          coverage run -m pytest
+          coverage report
+          coverage xml
+        shell: bash
+
+      - name: Upload coverage to Codecov
+        if: success()
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   publish:
-    needs: build
-    runs-on: windows-latest
+    needs: build_and_test
+    runs-on: ubuntu-latest
     if: >
       ${{ 
-        (github.event_name == 'release' && github.event.action == 'published') ||
-        (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+        (
+          github.event_name == 'release' && 
+          github.event.action == 'published'
+        ) || 
+        (
+          github.event_name == 'push' && 
+          startsWith(github.ref, 'refs/tags/v')
+        )
       }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -94,6 +123,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install twine
+        shell: bash
 
       - name: Publish to PyPI with Twine
         run: |
