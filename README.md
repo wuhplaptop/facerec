@@ -120,7 +120,8 @@ rolo-rec import-model --import-path combined_model.pt
 Use Rolo-Rec in your Python projects:
 
 ```python
-from rolo_rec import FacialRecognition, Config
+from myfacerec.config import Config
+from myfacerec.facial_recognition import FacialRecognition
 
 # Configuration
 config = Config()
@@ -189,7 +190,7 @@ Configure various aspects of the tool through the `Config` class:
 ### Hooks
 Inject custom logic with hooks:
 ```python
-from rolo_rec.hooks import Hooks
+from myfacerec.hooks import Hooks
 hooks = Hooks()
 
 # Register a hook
