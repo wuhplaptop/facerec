@@ -156,15 +156,29 @@ def test_export_model(mock_facial_recognition, tmp_path):
     # Arrange
     export_path = tmp_path / "exported_model.pt"
 
-    # Populate user_data to ensure it's saved
+    # Populate user_data to ensure it's included in the export
     mock_facial_recognition.user_data = {
         "user1": [np.array([0.1, 0.2, 0.3])]
     }
 
-    # Act
-    mock_facial_recognition.export_model(str(export_path))
+    # Expected state to be saved
+    expected_state = {
+        'yolo_state_dict': mock_facial_recognition.detector.model.state_dict(),
+        'facenet_state_dict': mock_facial_recognition.embedder.model.state_dict(),
+        'user_embeddings': {
+            "user1": [np.array([0.1, 0.2, 0.3])]
+        },
+        'device': mock_facial_recognition.config.device
+    }
 
-    # Assert
-    mock_facial_recognition.detector.model.state_dict.assert_called_once()
-    mock_facial_recognition.embedder.model.state_dict.assert_called_once()
-    mock_facial_recognition.data_store.save_user_data.assert_called_once_with(mock_facial_recognition.user_data)
+    # Mock torch.save to verify it's called correctly
+    with patch("torch.save") as mock_torch_save:
+        # Act
+        mock_facial_recognition.export_model(str(export_path))
+
+        # Assert
+        mock_facial_recognition.detector.model.state_dict.assert_called_once()
+        mock_facial_recognition.embedder.model.state_dict.assert_called_once()
+        mock_torch_save.assert_called_once_with(expected_state, str(export_path))
+        # Ensure save_user_data is NOT called
+        mock_facial_recognition.data_store.save_user_data.assert_not_called()
