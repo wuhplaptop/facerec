@@ -20,6 +20,22 @@ class MockConfig:
         self.cache_dir = "cache"
         self.alignment_fn = None  # Assuming no alignment function for simplicity
 
+# Custom Mock for CombinedFacialRecognitionModel
+class MockCombinedFacialRecognitionModel:
+    def __init__(self):
+        self.user_embeddings = {}
+        self.yolo = MagicMock()
+        self.facenet = MagicMock()
+        self.yolo.model.state_dict.return_value = {'yolo_layer': 'yolo_weights'}
+        self.facenet.model.state_dict.return_value = {'facenet_layer': 'facenet_weights'}
+    
+    def detect_and_embed(self, image):
+        # Simulate detection and embedding
+        return [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+    
+    def save_model(self):
+        pass
+
 # Fixtures for tests
 @pytest.fixture
 def mock_config():
@@ -29,27 +45,7 @@ def mock_config():
 @pytest.fixture
 def mock_combined_model():
     """Mock CombinedFacialRecognitionModel instance."""
-    # Create a MagicMock without spec to allow any attributes
-    model = MagicMock()
-    
-    # Mock the method used to detect and get embeddings, assuming it's __call__
-    model.__call__ = MagicMock(return_value=[((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))])
-    
-    # Mock the user_embeddings attribute
-    model.user_embeddings = {}
-    
-    # Mock the yolo and facenet attributes with their own mocks
-    model.yolo = MagicMock()
-    model.facenet = MagicMock()
-    
-    # Mock the state_dict method for yolo and facenet models
-    model.yolo.model.state_dict = MagicMock(return_value={'yolo_layer': 'yolo_weights'})
-    model.facenet.model.state_dict = MagicMock(return_value={'facenet_layer': 'facenet_weights'})
-    
-    # Mock the save_model method to prevent actual file operations
-    model.save_model = MagicMock(return_value=None)
-    
-    # Mock the load_model class method to return this mocked model
+    model = MockCombinedFacialRecognitionModel()
     with patch.object(CombinedFacialRecognitionModel, 'load_model', return_value=model):
         yield model
 
@@ -57,7 +53,7 @@ def mock_combined_model():
 def mock_data_store(mock_combined_model):
     """Mock UserDataStore instance."""
     data_store = MagicMock(spec=UserDataStore)
-    # Set load_user_data to return model.user_embeddings
+    # Link user_data to model.user_embeddings
     data_store.load_user_data.return_value = mock_combined_model.user_embeddings
     data_store.save_user_data.return_value = None
     return data_store
@@ -70,7 +66,7 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
             config=mock_config,
             data_store=mock_data_store
         )
-        # Assign the mocked model directly (ensure it's the same instance)
+        # Assign the mocked model directly
         fr.model = mock_combined_model
     return fr
 
@@ -87,27 +83,27 @@ def test_facial_recognition_initialization(mock_facial_recognition, mock_config,
     assert fr.user_data == mock_combined_model.user_embeddings, "User data does not match."
     mock_data_store.load_user_data.assert_called_once()
 
-def test_register_user(mock_facial_recognition):
+def test_register_user(mock_facial_recognition, mock_combined_model):
     """Test registering a new user."""
     # Arrange
     user_id = "test_user"
     images = [MagicMock(spec=Image.Image)]  # Mock image objects
 
-    # Mock model __call__ to return one face with embedding
-    mock_facial_recognition.model.__call__.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+    # Mock model.detect_and_embed to return one face with embedding
+    mock_combined_model.detect_and_embed.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
 
     # Act
     message = mock_facial_recognition.register_user(user_id, images)
 
     # Assert
-    mock_facial_recognition.model.__call__.assert_called_once_with(images[0])
+    mock_combined_model.detect_and_embed.assert_called_once_with(images[0])
     mock_facial_recognition.data_store.save_user_data.assert_called_once_with(mock_facial_recognition.user_data)
     assert message == f"User '{user_id}' registered with 1 embedding(s).", "Registration message mismatch."
     assert user_id in mock_facial_recognition.user_data, "User ID not in user data."
     assert len(mock_facial_recognition.user_data[user_id]) == 1, "Incorrect number of embeddings for user."
     assert np.array_equal(mock_facial_recognition.user_data[user_id][0], np.array([0.1, 0.2, 0.3])), "Embedding does not match."
 
-def test_identify_user_known(mock_facial_recognition):
+def test_identify_user_known(mock_facial_recognition, mock_combined_model):
     """Test identifying a known user."""
     # Arrange
     user_id = "known_user"
@@ -115,8 +111,8 @@ def test_identify_user_known(mock_facial_recognition):
         user_id: [np.array([0.1, 0.2, 0.3])]
     }
 
-    # Mock model __call__ to return embeddings similar to known user
-    mock_facial_recognition.model.__call__.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+    # Mock model.detect_and_embed to return embeddings similar to known user
+    mock_combined_model.detect_and_embed.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
 
     # Mock cosine_similarity to return perfect similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[1.0]])):
@@ -126,7 +122,7 @@ def test_identify_user_known(mock_facial_recognition):
     expected_result = [{'face_id': 1, 'user_id': user_id, 'similarity': 1.0}]
     assert results == expected_result, f"Expected {expected_result}, but got {results}."
 
-def test_identify_user_unknown(mock_facial_recognition):
+def test_identify_user_unknown(mock_facial_recognition, mock_combined_model):
     """Test identifying an unknown user."""
     # Arrange
     user_id = "known_user"
@@ -134,8 +130,8 @@ def test_identify_user_unknown(mock_facial_recognition):
         user_id: [np.array([0.1, 0.2, 0.3])]
     }
 
-    # Mock model __call__ to return embeddings dissimilar to known user
-    mock_facial_recognition.model.__call__.return_value = [((10, 10, 100, 100), np.array([0.4, 0.5, 0.6]))]
+    # Mock model.detect_and_embed to return embeddings dissimilar to known user
+    mock_combined_model.detect_and_embed.return_value = [((10, 10, 100, 100), np.array([0.4, 0.5, 0.6]))]
 
     # Mock cosine_similarity to return low similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[0.5]])):
@@ -145,7 +141,7 @@ def test_identify_user_unknown(mock_facial_recognition):
     expected_result = [{'face_id': 1, 'user_id': 'Unknown', 'similarity': 0.5}]
     assert results == expected_result, f"Expected {expected_result}, but got {results}."
 
-def test_export_model(mock_facial_recognition, tmp_path):
+def test_export_model(mock_facial_recognition, mock_combined_model, tmp_path):
     """Test exporting the facial recognition model."""
     # Arrange
     export_path = tmp_path / "exported_model.pt"
@@ -160,8 +156,8 @@ def test_export_model(mock_facial_recognition, tmp_path):
     facenet_state_dict = {'facenet_layer': 'facenet_weights'}
 
     # Assign the predefined return values to the mocks
-    mock_facial_recognition.model.yolo.model.state_dict.return_value = yolo_state_dict
-    mock_facial_recognition.model.facenet.model.state_dict.return_value = facenet_state_dict
+    mock_combined_model.yolo.model.state_dict.return_value = yolo_state_dict
+    mock_combined_model.facenet.model.state_dict.return_value = facenet_state_dict
 
     # Expected state to be saved
     expected_state = {
@@ -184,8 +180,8 @@ def test_export_model(mock_facial_recognition, tmp_path):
 
         # Assert
         # Ensure state_dict() is called exactly once for each model
-        mock_facial_recognition.model.yolo.model.state_dict.assert_called_once()
-        mock_facial_recognition.model.facenet.model.state_dict.assert_called_once()
+        mock_combined_model.yolo.model.state_dict.assert_called_once()
+        mock_combined_model.facenet.model.state_dict.assert_called_once()
 
         # Ensure torch.save is called once
         mock_torch_save.assert_called_once()
