@@ -173,7 +173,7 @@ class FacialRecognition:
 
             if config is None:
                 config = Config(
-                    yolo_model_path=model.yolo.model_path if hasattr(model.yolo, 'model_path') else "yolov8n-face.pt",
+                    yolo_model_path=model.yolo.model_path if hasattr(model.yolo, 'model_path') else "myfacerec/models/face.pt",
                     conf_threshold=model.conf_threshold,
                     device=model.device
                 )
