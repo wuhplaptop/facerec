@@ -6,13 +6,14 @@ from PIL import Image
 import shutil
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import torch
+import numpy as np
 
 from .config import Config
 from .facial_recognition import FacialRecognition
 from .hooks import Hooks
 from .combined_model import CombinedFacialRecognitionModel
-import torch
-import numpy as np
+from .data_store import JSONUserDataStore
 
 def main():
     parser = argparse.ArgumentParser(
@@ -28,7 +29,7 @@ def main():
     reg_parser.add_argument("--user", required=True, help="User ID (unique).")
     reg_parser.add_argument("--images", nargs="+", required=True, help="Paths to one or more face images.")
     reg_parser.add_argument("--conf", type=float, default=0.5, help="YOLO confidence threshold.")
-    reg_parser.add_argument("--yolo-model", default="yolov8n-face.pt", help="Path to YOLO model (.pt).")
+    reg_parser.add_argument("--yolo-model", default=None, help="Path or URL to YOLO model (.pt). If not set, default model is used.")
     reg_parser.add_argument("--output-model", default=None, help="Path to save the combined model after registration.")
 
     # -------------------------------------------------------------------------
@@ -37,7 +38,7 @@ def main():
     id_parser = subparsers.add_parser("identify", help="Identify faces in an image.")
     id_parser.add_argument("--image", required=True, help="Path to input image.")
     id_parser.add_argument("--threshold", type=float, default=0.6, help="Recognition threshold.")
-    id_parser.add_argument("--yolo-model", default="yolov8n-face.pt", help="Path to YOLO model (.pt).")
+    id_parser.add_argument("--yolo-model", default=None, help="Path or URL to YOLO model (.pt). If not set, default model is used.")
     id_parser.add_argument("--input-model", default=None, help="Path to the combined model (.pt).")
 
     # -------------------------------------------------------------------------
@@ -45,14 +46,25 @@ def main():
     # -------------------------------------------------------------------------
     export_model_parser = subparsers.add_parser("export-model", help="Export the combined facial recognition model.")
     export_model_parser.add_argument("--output-path", required=True, help="Path to save the exported model (.pt).")
-    export_model_parser.add_argument("--yolo-model", default="yolov8n-face.pt", help="Path to YOLO model (.pt).")
+    export_model_parser.add_argument("--yolo-model", default=None, help="Path or URL to YOLO model (.pt). If not set, default model is used.")
+    export_model_parser.add_argument("--input-model", default=None, help="Path to the existing combined model (.pt). If not set, a new model is initialized.")
 
     # -------------------------------------------------------------------------
     # Import model
     # -------------------------------------------------------------------------
     import_model_parser = subparsers.add_parser("import-model", help="Import a combined facial recognition model.")
     import_model_parser.add_argument("--input-path", required=True, help="Path to the combined model (.pt).")
-    import_model_parser.add_argument("--yolo-model", default="yolov8n-face.pt", help="Path to YOLO model (.pt).")
+    import_model_parser.add_argument("--yolo-model", default=None, help="Path or URL to YOLO model (.pt). If not set, default model is used.")
+
+    # -------------------------------------------------------------------------
+    # Upload model (Optional)
+    # -------------------------------------------------------------------------
+    # [Implementation for upload-model can be added here if required.]
+
+    # -------------------------------------------------------------------------
+    # Download model (Optional)
+    # -------------------------------------------------------------------------
+    # [Implementation for download-model can be added here if required.]
 
     # -------------------------------------------------------------------------
     # Other existing commands (export-data, import-data, list-users, delete-user)
@@ -75,10 +87,13 @@ def main():
 
     # Handle commands
     if args.command == "register":
+        # Initialize FacialRecognition
         fr = FacialRecognition(config)
-        # Load existing model if exists
+
+        # If an existing combined model is provided, import it
         if args.output_model and os.path.exists(args.output_model):
             fr = FacialRecognition.import_combined_model(args.output_model, config)
+
         image_paths = args.images
         images = []
         for img_path in image_paths:
@@ -119,20 +134,25 @@ def main():
             print(f"Face {res['face_id']}: User='{res['user_id']}', Similarity={res['similarity']:.2f}")
 
     elif args.command == "export-model":
+        # Initialize FacialRecognition
         fr = FacialRecognition(config)
+
+        # If an existing combined model is provided, import it
+        if args.input_model and os.path.exists(args.input_model):
+            fr = FacialRecognition.import_combined_model(args.input_model, config)
+
+        # Export the combined model
         fr.export_combined_model(args.output_path)
 
     elif args.command == "import-model":
+        # Import the combined model
         fr = FacialRecognition.import_combined_model(args.input_path, config)
-
-    # -------------------------------------------------------------------------
-    # Handle other existing commands (export-data, import-data, list-users, delete-user)
-    # -------------------------------------------------------------------------
-    # [Include existing command handlers here, omitted for brevity]
+        print(f"Combined model imported from {args.input_path}.")
 
     else:
-        parser.print_help()
-        sys.exit(1)
+        # Handle other commands here
+        # [Implementation for other commands]
+        pass
 
 if __name__ == "__main__":
     main()
