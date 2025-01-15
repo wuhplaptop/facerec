@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="rolo-rec",  # Renamed to "rolo-rec" for PyPI
-    version="0.2.0",
+    version="0.5.0",
     description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -37,6 +37,24 @@ setup(
             # Add other development/testing dependencies here
         ],
     },
+    python_requires=">=3.9",
+    entry_points={
+        "console_scripts": [
+            "rolo-rec=myfacerec.cli:main",
+        ],
+        "myfacerec.detectors": [
+            # Example: "yolo_face=myfacerec.detectors:YOLOFaceDetector",
+            # Users can add their custom detectors here
+        ],
+        "myfacerec.embedders": [
+            # Example: "facenet=myfacerec.embedders:FacenetEmbedder",
+            # Users can add their custom embedders here
+        ],
+        "myfacerec.data_stores": [
+            # Example: "json_store=myfacerec.data_store:JSONUserDataStore",
+            # Users can add their custom data stores here
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",  # Replace with your actual license if different
@@ -44,13 +62,6 @@ setup(
         "Intended Audience :: Developers",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    python_requires=">=3.7",
-    entry_points={
-        "console_scripts": [
-            # This means users can now run `rolo-rec` from the command line
-            "rolo-rec=myfacerec.cli:main", 
-        ],
-    },
     license="MIT",  # Replace with your actual license if different
     keywords="facial recognition yolo facenet",
     project_urls={
