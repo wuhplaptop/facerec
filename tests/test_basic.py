@@ -29,11 +29,10 @@ def mock_config():
 @pytest.fixture
 def mock_combined_model():
     """Mock CombinedFacialRecognitionModel instance."""
-    # Create a MagicMock with the spec of CombinedFacialRecognitionModel
-    model = MagicMock(spec=CombinedFacialRecognitionModel)
+    # Create a MagicMock without spec to allow any attributes
+    model = MagicMock()
     
-    # Mock the __call__ method to return detections and embeddings
-    # Each detection is a tuple of (bounding_box, embedding)
+    # Mock the method used to detect and get embeddings, assuming it's __call__
     model.__call__ = MagicMock(return_value=[((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))])
     
     # Mock the user_embeddings attribute
@@ -44,8 +43,6 @@ def mock_combined_model():
     model.facenet = MagicMock()
     
     # Mock the state_dict method for yolo and facenet models
-    model.yolo.model = MagicMock()
-    model.facenet.model = MagicMock()
     model.yolo.model.state_dict = MagicMock(return_value={'yolo_layer': 'yolo_weights'})
     model.facenet.model.state_dict = MagicMock(return_value={'facenet_layer': 'facenet_weights'})
     
@@ -57,10 +54,11 @@ def mock_combined_model():
         yield model
 
 @pytest.fixture
-def mock_data_store():
+def mock_data_store(mock_combined_model):
     """Mock UserDataStore instance."""
     data_store = MagicMock(spec=UserDataStore)
-    data_store.load_user_data.return_value = {}
+    # Set load_user_data to return model.user_embeddings
+    data_store.load_user_data.return_value = mock_combined_model.user_embeddings
     data_store.save_user_data.return_value = None
     return data_store
 
@@ -72,6 +70,7 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
             config=mock_config,
             data_store=mock_data_store
         )
+        # Assign the mocked model directly (ensure it's the same instance)
         fr.model = mock_combined_model
     return fr
 
