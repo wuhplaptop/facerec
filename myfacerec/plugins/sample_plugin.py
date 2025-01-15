@@ -4,6 +4,7 @@ from ..embedders import FaceEmbedder
 from PIL import Image
 import numpy as np
 import torch
+from typing import List, Tuple
 
 class SampleEmbedder(FaceEmbedder):
     def __init__(self):
