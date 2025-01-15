@@ -15,7 +15,6 @@ class UserDataStore(abc.ABC):
     def save_user_data(self, user_data):
         pass
 
-
 class JSONUserDataStore(UserDataStore):
     def __init__(self, path="user_faces.json"):
         self.path = path
