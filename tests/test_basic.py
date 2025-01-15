@@ -29,12 +29,27 @@ def mock_config():
 @pytest.fixture
 def mock_combined_model():
     """Mock CombinedFacialRecognitionModel instance."""
+    # Create a MagicMock with the spec of CombinedFacialRecognitionModel
     model = MagicMock(spec=CombinedFacialRecognitionModel)
     
-    # Replace the __call__ method with a MagicMock that returns desired value
+    # Mock the __call__ method to return detections and embeddings
+    # Each detection is a tuple of (bounding_box, embedding)
     model.__call__ = MagicMock(return_value=[((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))])
     
-    # Mock the save_model method
+    # Mock the user_embeddings attribute
+    model.user_embeddings = {}
+    
+    # Mock the yolo and facenet attributes with their own mocks
+    model.yolo = MagicMock()
+    model.facenet = MagicMock()
+    
+    # Mock the state_dict method for yolo and facenet models
+    model.yolo.model = MagicMock()
+    model.facenet.model = MagicMock()
+    model.yolo.model.state_dict = MagicMock(return_value={'yolo_layer': 'yolo_weights'})
+    model.facenet.model.state_dict = MagicMock(return_value={'facenet_layer': 'facenet_weights'})
+    
+    # Mock the save_model method to prevent actual file operations
     model.save_model = MagicMock(return_value=None)
     
     # Mock the load_model class method to return this mocked model
@@ -67,10 +82,10 @@ def test_facial_recognition_initialization(mock_facial_recognition, mock_config,
     fr = mock_facial_recognition
 
     # Assert
-    assert fr.config == mock_config
-    assert fr.model == mock_combined_model
-    assert fr.data_store == mock_data_store
-    assert fr.user_data == mock_combined_model.user_embeddings
+    assert fr.config == mock_config, "Config does not match."
+    assert fr.model == mock_combined_model, "Model does not match."
+    assert fr.data_store == mock_data_store, "Data store does not match."
+    assert fr.user_data == mock_combined_model.user_embeddings, "User data does not match."
     mock_data_store.load_user_data.assert_called_once()
 
 def test_register_user(mock_facial_recognition):
@@ -88,10 +103,10 @@ def test_register_user(mock_facial_recognition):
     # Assert
     mock_facial_recognition.model.__call__.assert_called_once_with(images[0])
     mock_facial_recognition.data_store.save_user_data.assert_called_once_with(mock_facial_recognition.user_data)
-    assert message == f"User '{user_id}' registered with 1 embedding(s)."
-    assert user_id in mock_facial_recognition.user_data
-    assert len(mock_facial_recognition.user_data[user_id]) == 1
-    assert np.array_equal(mock_facial_recognition.user_data[user_id][0], np.array([0.1, 0.2, 0.3]))
+    assert message == f"User '{user_id}' registered with 1 embedding(s).", "Registration message mismatch."
+    assert user_id in mock_facial_recognition.user_data, "User ID not in user data."
+    assert len(mock_facial_recognition.user_data[user_id]) == 1, "Incorrect number of embeddings for user."
+    assert np.array_equal(mock_facial_recognition.user_data[user_id][0], np.array([0.1, 0.2, 0.3])), "Embedding does not match."
 
 def test_identify_user_known(mock_facial_recognition):
     """Test identifying a known user."""
@@ -110,7 +125,7 @@ def test_identify_user_known(mock_facial_recognition):
 
     # Assert
     expected_result = [{'face_id': 1, 'user_id': user_id, 'similarity': 1.0}]
-    assert results == expected_result
+    assert results == expected_result, f"Expected {expected_result}, but got {results}."
 
 def test_identify_user_unknown(mock_facial_recognition):
     """Test identifying an unknown user."""
@@ -129,7 +144,7 @@ def test_identify_user_unknown(mock_facial_recognition):
 
     # Assert
     expected_result = [{'face_id': 1, 'user_id': 'Unknown', 'similarity': 0.5}]
-    assert results == expected_result
+    assert results == expected_result, f"Expected {expected_result}, but got {results}."
 
 def test_export_model(mock_facial_recognition, tmp_path):
     """Test exporting the facial recognition model."""
@@ -147,9 +162,9 @@ def test_export_model(mock_facial_recognition, tmp_path):
 
     # Assign the predefined return values to the mocks
     mock_facial_recognition.model.yolo.model.state_dict.return_value = yolo_state_dict
-    mock_facial_recognition.model.facenet.state_dict.return_value = facenet_state_dict
+    mock_facial_recognition.model.facenet.model.state_dict.return_value = facenet_state_dict
 
-    # Expected state to be saved (without calling state_dict())
+    # Expected state to be saved
     expected_state = {
         'yolo_state_dict': yolo_state_dict,
         'facenet_state_dict': facenet_state_dict,
@@ -171,7 +186,7 @@ def test_export_model(mock_facial_recognition, tmp_path):
         # Assert
         # Ensure state_dict() is called exactly once for each model
         mock_facial_recognition.model.yolo.model.state_dict.assert_called_once()
-        mock_facial_recognition.model.facenet.state_dict.assert_called_once()
+        mock_facial_recognition.model.facenet.model.state_dict.assert_called_once()
 
         # Ensure torch.save is called once
         mock_torch_save.assert_called_once()
