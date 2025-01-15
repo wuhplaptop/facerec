@@ -13,7 +13,7 @@ import json
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(
         self, 
-        yolo_model_path: str = "yolov8n-face.pt",
+        yolo_model_path: str = "myfacerec/models/face.pt",
         facenet_model: Optional[InceptionResnetV1] = None,
         device: str = 'cpu',
         conf_threshold: float = 0.5
@@ -102,7 +102,7 @@ class CombinedFacialRecognitionModel(nn.Module):
         """
         state = torch.load(load_path, map_location=device)
         config = state['config']
-        yolo_model_path = config.get('yolo_model_path', "yolov8n-face.pt")
+        yolo_model_path = config.get('yolo_model_path', "myfacerec/models/face.pt")
         conf_threshold = config.get('conf_threshold', 0.5)
 
         # Initialize model
