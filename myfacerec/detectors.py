@@ -1,14 +1,15 @@
 # myfacerec/detectors.py
 
 import abc
+import os
 from typing import List, Tuple
+from ultralytics import YOLO
 
 class FaceDetector(abc.ABC):
     """Abstract base class for face detectors."""
     @abc.abstractmethod
     def detect_faces(self, image) -> List[Tuple[int, int, int, int]]:
         pass
-
 
 class YOLOFaceDetector(FaceDetector):
     def __init__(self, model, conf_threshold=0.5):
