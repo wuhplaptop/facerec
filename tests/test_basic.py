@@ -127,4 +127,87 @@ def test_identify_user_unknown(mock_facial_recognition):
 
     # Mock cosine_similarity to return low similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[0.5]])):
-  
+        results = mock_facial_recognition.identify_user(Image.new('RGB', (100, 100)))
+
+    # Assert
+    expected_result = [{'face_id': 1, 'user_id': 'Unknown', 'similarity': 0.5}]
+    assert results == expected_result
+
+def test_export_model(mock_facial_recognition, tmp_path):
+    """Test exporting the facial recognition model."""
+    # Arrange
+    export_path = tmp_path / "exported_model.pt"
+
+    # Populate user_data to ensure it's included in the export
+    mock_facial_recognition.user_data = {
+        "user1": [np.array([0.1, 0.2, 0.3])]
+    }
+
+    # Define mock return values for state_dict
+    yolo_state_dict = {'yolo_layer': 'yolo_weights'}
+    facenet_state_dict = {'facenet_layer': 'facenet_weights'}
+
+    # Assign the predefined return values to the mocks
+    mock_facial_recognition.model.yolo.model.state_dict.return_value = yolo_state_dict
+    mock_facial_recognition.model.facenet.state_dict.return_value = facenet_state_dict
+
+    # Expected state to be saved (without calling state_dict())
+    expected_state = {
+        'yolo_state_dict': yolo_state_dict,
+        'facenet_state_dict': facenet_state_dict,
+        'user_embeddings': {
+            "user1": [np.array([0.1, 0.2, 0.3])]
+        },
+        'config': {
+            'yolo_model_path': mock_facial_recognition.config.yolo_model_path,
+            'conf_threshold': mock_facial_recognition.config.conf_threshold,
+            'device': mock_facial_recognition.config.device
+        }
+    }
+
+    # Mock torch.save to verify it's called correctly
+    with patch("torch.save") as mock_torch_save:
+        # Act
+        mock_facial_recognition.export_combined_model(str(export_path))
+
+        # Assert
+        # Ensure state_dict() is called exactly once for each model
+        mock_facial_recognition.model.yolo.model.state_dict.assert_called_once()
+        mock_facial_recognition.model.facenet.state_dict.assert_called_once()
+
+        # Ensure torch.save is called once
+        mock_torch_save.assert_called_once()
+
+        # Retrieve the actual call arguments
+        args, kwargs = mock_torch_save.call_args
+        saved_state = args[0]
+        saved_export_path = args[1]
+
+        # Assert that the export path is correct
+        assert saved_export_path == str(export_path), "Export path does not match."
+
+        # Assert yolo_state_dict
+        assert saved_state['yolo_state_dict'] == yolo_state_dict, "YOLO state_dict does not match."
+
+        # Assert facenet_state_dict
+        assert saved_state['facenet_state_dict'] == facenet_state_dict, "Facenet state_dict does not match."
+
+        # Assert config
+        assert saved_state['config'] == {
+            'yolo_model_path': mock_facial_recognition.config.yolo_model_path,
+            'conf_threshold': mock_facial_recognition.config.conf_threshold,
+            'device': mock_facial_recognition.config.device
+        }, "Config does not match."
+
+        # Assert user_embeddings
+        assert "user1" in saved_state['user_embeddings'], "User1 not found in user_embeddings."
+        assert len(saved_state['user_embeddings']['user1']) == 1, "Incorrect number of embeddings for user1."
+        np.testing.assert_array_almost_equal(
+            saved_state['user_embeddings']['user1'][0],
+            mock_facial_recognition.user_data['user1'][0],
+            decimal=5,
+            err_msg="User embedding does not match."
+        )
+
+        # Ensure save_user_data is NOT called
+        mock_facial_recognition.data_store.save_user_data.assert_not_called()
