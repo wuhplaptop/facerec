@@ -50,8 +50,8 @@ jobs:
       # 5. Download 'face.pt' if not already present
       - name: Download face.pt
         run: |
-          mkdir models
-          curl -L -o models/face.pt https://raw.githubusercontent.com/wuhplaptop/facerec/main/face.pt
+          mkdir myfacerec\models
+          curl -L -o myfacerec/models/face.pt https://raw.githubusercontent.com/wuhplaptop/facerec/main/myfacerec/models/face.pt
         shell: bash
 
       # 6. Build the Python package (source and wheel distributions)
