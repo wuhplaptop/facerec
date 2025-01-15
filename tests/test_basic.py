@@ -30,14 +30,16 @@ def mock_config():
 def mock_combined_model():
     """Mock CombinedFacialRecognitionModel instance."""
     model = MagicMock(spec=CombinedFacialRecognitionModel)
-    # Mock the __call__ method to return detections
-    # Each detection is a tuple of (bounding_box, embedding)
-    model.__call__.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+    
+    # Replace the __call__ method with a MagicMock that returns desired value
+    model.__call__ = MagicMock(return_value=[((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))])
+    
     # Mock the save_model method
-    model.save_model.return_value = None
-    # Mock the load_model class method
-    CombinedFacialRecognitionModel.load_model = MagicMock(return_value=model)
-    return model
+    model.save_model = MagicMock(return_value=None)
+    
+    # Mock the load_model class method to return this mocked model
+    with patch.object(CombinedFacialRecognitionModel, 'load_model', return_value=model):
+        yield model
 
 @pytest.fixture
 def mock_data_store():
@@ -59,14 +61,10 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     return fr
 
 # Test cases
-def test_facial_recognition_initialization(mock_config, mock_combined_model, mock_data_store):
+def test_facial_recognition_initialization(mock_facial_recognition, mock_config, mock_combined_model, mock_data_store):
     """Test initialization of the FacialRecognition class."""
-    # Act
-    fr = FacialRecognition(
-        config=mock_config,
-        data_store=mock_data_store
-    )
-    fr.model = mock_combined_model
+    # Act is already done via fixture
+    fr = mock_facial_recognition
 
     # Assert
     assert fr.config == mock_config
