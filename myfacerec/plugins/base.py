@@ -18,7 +18,7 @@ class PluginManager:
 
     def load_detector(self, name: str) -> FaceDetector:
         try:
-            entry_point = pkg_resources.get_entry_map('rolo-rec')['rolo_rec.detectors'][name]
+            entry_point = pkg_resources.get_entry_map('myfacerec')['myfacerec.detectors'][name]
             detector_class = entry_point.load()
             logger.info(f"Loaded detector plugin: {name}")
             return detector_class()
@@ -31,7 +31,7 @@ class PluginManager:
 
     def load_embedder(self, name: str) -> FaceEmbedder:
         try:
-            entry_point = pkg_resources.get_entry_map('rolo-rec')['rolo_rec.embedders'][name]
+            entry_point = pkg_resources.get_entry_map('myfacerec')['myfacerec.embedders'][name]
             embedder_class = entry_point.load()
             logger.info(f"Loaded embedder plugin: {name}")
             return embedder_class()
@@ -44,7 +44,7 @@ class PluginManager:
 
     def load_data_store(self, name: str) -> UserDataStore:
         try:
-            entry_point = pkg_resources.get_entry_map('rolo-rec')['rolo_rec.data_stores'][name]
+            entry_point = pkg_resources.get_entry_map('myfacerec')['myfacerec.data_stores'][name]
             data_store_class = entry_point.load()
             logger.info(f"Loaded data store plugin: {name}")
             return data_store_class()
