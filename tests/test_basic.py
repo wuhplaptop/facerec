@@ -27,9 +27,8 @@ def mock_config():
 
 @pytest.fixture
 def mock_combined_model():
-    """Mock CombinedFacialRecognitionModel instance."""
-    # Create a MagicMock instance for CombinedFacialRecognitionModel
-    model = MagicMock(spec=CombinedFacialRecognitionModel)
+    """Mock CombinedFacialRecognitionModel instance without using 'spec'."""
+    model = MagicMock()
     
     # Mock the __call__ method to return detections and embeddings
     # Each detection is a tuple of (bounding_box, embedding)
@@ -67,7 +66,7 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     fr = FacialRecognition(
         config=mock_config,
         data_store=mock_data_store,
-        model=mock_combined_model
+        model=mock_combined_model  # Injecting the mock model
     )
     return fr
 
