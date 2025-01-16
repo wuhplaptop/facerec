@@ -27,27 +27,27 @@ def mock_config():
 
 @pytest.fixture
 def mock_combined_model():
-    """Mock CombinedFacialRecognitionModel instance without using 'spec'."""
+    """Mock CombinedFacialRecognitionModel instance by mocking the 'forward' method."""
     model = MagicMock()
-    
-    # Mock the __call__ method to return detections and embeddings
+
+    # Mock the forward method to return detections and embeddings
     # Each detection is a tuple of (bounding_box, embedding)
-    model.__call__.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
-    
+    model.forward.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+
     # Mock the user_embeddings attribute
     model.user_embeddings = {}
-    
+
     # Mock the yolo and facenet attributes with their own mocks
     model.yolo = MagicMock()
     model.facenet = MagicMock()
-    
+
     # Mock the state_dict method for yolo and facenet models
     model.yolo.model.state_dict.return_value = {'yolo_layer': 'yolo_weights'}
     model.facenet.model.state_dict.return_value = {'facenet_layer': 'facenet_weights'}
-    
+
     # Mock the save_model method to prevent actual file operations
     model.save_model.return_value = None
-    
+
     return model
 
 @pytest.fixture
@@ -89,14 +89,12 @@ def test_register_user(mock_facial_recognition, mock_combined_model):
     user_id = "test_user"
     images = [MagicMock(spec=Image.Image)]  # Mock image objects
 
-    # Mock model.__call__ to return one face with embedding
-    mock_combined_model.__call__.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
-
+    # Since 'forward' is mocked, 'model(image)' will internally call 'forward' and return the mocked value
     # Act
     message = mock_facial_recognition.register_user(user_id, images)
 
     # Assert
-    mock_combined_model.__call__.assert_called_once_with(images[0])
+    mock_combined_model.forward.assert_called_once_with(images[0])
     mock_facial_recognition.data_store.save_user_data.assert_called_once_with(mock_facial_recognition.user_data)
     assert message == f"User '{user_id}' registered with 1 embedding(s).", "Registration message mismatch."
     assert user_id in mock_facial_recognition.user_data, "User ID not in user data."
@@ -111,8 +109,8 @@ def test_identify_user_known(mock_facial_recognition, mock_combined_model):
         user_id: [np.array([0.1, 0.2, 0.3])]
     }
 
-    # Mock model.__call__ to return embeddings similar to known user
-    mock_combined_model.__call__.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+    # Mock the forward method to return embeddings similar to known user
+    mock_combined_model.forward.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
 
     # Mock cosine_similarity to return perfect similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[1.0]])):
@@ -130,8 +128,8 @@ def test_identify_user_unknown(mock_facial_recognition, mock_combined_model):
         user_id: [np.array([0.1, 0.2, 0.3])]
     }
 
-    # Mock model.__call__ to return embeddings dissimilar to known user
-    mock_combined_model.__call__.return_value = [((10, 10, 100, 100), np.array([0.4, 0.5, 0.6]))]
+    # Mock the forward method to return embeddings dissimilar to known user
+    mock_combined_model.forward.return_value = [((10, 10, 100, 100), np.array([0.4, 0.5, 0.6]))]
 
     # Mock cosine_similarity to return low similarity
     with patch("myfacerec.facial_recognition.cosine_similarity", return_value=np.array([[0.5]])):
