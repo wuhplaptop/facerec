@@ -20,7 +20,8 @@ class FacialRecognition:
     def __init__(
         self,
         config: Config,
-        data_store: Optional[UserDataStore] = None
+        data_store: Optional[UserDataStore] = None,
+        model: Optional[CombinedFacialRecognitionModel] = None
     ):
         """
         Initialize the FacialRecognition class with the combined model and data store.
@@ -28,6 +29,7 @@ class FacialRecognition:
         Args:
             config (Config): Configuration object.
             data_store (UserDataStore, optional): Custom data store.
+            model (CombinedFacialRecognitionModel, optional): Custom combined model for testing.
         """
         self.config = config
         self.logger = logger
@@ -38,7 +40,7 @@ class FacialRecognition:
         self.logger.info("Data store initialized with %d users.", len(self.user_data))
 
         # Initialize Combined Model
-        self.model = CombinedFacialRecognitionModel(
+        self.model = model or CombinedFacialRecognitionModel(
             yolo_model_path=self.config.yolo_model_path,
             device=self.config.device,
             conf_threshold=self.config.conf_threshold
