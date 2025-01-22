@@ -1,12 +1,12 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from myfacerec.facial_recognition import FacialRecognition
-from myfacerec.combined_model import CombinedFacialRecognitionModel
 from myfacerec.data_store import UserDataStore
+from myfacerec.combined_model import CombinedFacialRecognitionModel
 from PIL import Image
 import numpy as np
 
-# Mock configuration object
+# Mock config
 class MockConfig:
     def __init__(self):
         self.conf_threshold = 0.5
@@ -15,43 +15,43 @@ class MockConfig:
         self.yolo_model_path = "myfacerec/models/face.pt"
         self.device = "cpu"
         self.cache_dir = "cache"
-        self.alignment_fn = None  # Assuming no alignment function for simplicity
+        self.alignment_fn = None
 
 @pytest.fixture
 def mock_config():
-    """Mock configuration fixture."""
     return MockConfig()
 
 @pytest.fixture
 def mock_combined_model():
     """
-    Mock CombinedFacialRecognitionModel instance using MagicMock with a spec.
-    The __call__ method is redirected to the mocked forward method.
+    MagicMock without 'spec=CombinedFacialRecognitionModel'
+    so we can mock __call__.side_effect without triggering
+    'method object has no attribute side_effect' errors.
     """
-    model = MagicMock(spec=CombinedFacialRecognitionModel)
+    # 1) Create a generic MagicMock (no spec)
+    model = MagicMock()
 
-    # Mock the forward method so that model(...) returns something
+    # 2) Let .forward(...) return something
     model.forward.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
+
+    # 3) Make model(...) call model.forward(...)
+    #    This is how PyTorch usually works, but we can do it manually here.
     model.__call__.side_effect = model.forward
 
-    # Some tests do: mock_combined_model.detect_and_embed.return_value = ...
-    # So define detect_and_embed on the mock:
+    # 4) If your tests do mock_combined_model.detect_and_embed.return_value = ...
+    #    define a default return:
     model.detect_and_embed.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
 
-    # Mock the user_embeddings attribute
+    # 5) Mock user_embeddings, sub-attributes, etc.
     model.user_embeddings = {}
-
-    # Mock sub‐attributes
     model.yolo = MagicMock()
     model.facenet = MagicMock()
 
-    # Mock state_dict for yolo and facenet
     model.yolo.model.state_dict.return_value = {'yolo_layer': 'yolo_weights'}
     model.facenet.model.state_dict.return_value = {'facenet_layer': 'facenet_weights'}
 
-    # Ensure save_model can handle (self, save_path)
+    # 6) Mock save_model so it won’t do real file I/O
     def _mock_save_model(save_path):
-        # No actual file I/O
         pass
     model.save_model.side_effect = _mock_save_model
 
@@ -59,7 +59,6 @@ def mock_combined_model():
 
 @pytest.fixture
 def mock_data_store(mock_combined_model):
-    """Mock UserDataStore instance linked to model.user_embeddings."""
     data_store = MagicMock(spec=UserDataStore)
     data_store.load_user_data.return_value = mock_combined_model.user_embeddings
     data_store.save_user_data.return_value = None
@@ -67,10 +66,7 @@ def mock_data_store(mock_combined_model):
 
 @pytest.fixture
 def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
-    """
-    Mocked FacialRecognition that uses our CombinedFacialRecognitionModel
-    and a mocked data store.
-    """
+    """Mock FacialRecognition that uses the above mock model & data store."""
     fr = FacialRecognition(
         config=mock_config,
         data_store=mock_data_store,
@@ -78,73 +74,51 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     )
     return fr
 
-
-# ---------------------------------------------------------------------------
-# Below are the original 4 tests that previously failed due to mocking issues
-# ---------------------------------------------------------------------------
+# ------------------------------------------------------------------------
+# Example tests that used to fail due to mocking issues:
+# ------------------------------------------------------------------------
 
 def test_register_user(mock_facial_recognition, mock_combined_model):
-    """Test registering a new user."""
     user_id = "test_user"
-    images = [MagicMock(spec=Image.Image)]  # Mock image objects
-
-    # We want detect_and_embed to return a face with an embedding
+    images = [MagicMock(spec=Image.Image)]
     mock_combined_model.detect_and_embed.return_value = [
         ((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))
     ]
-
-    message = mock_facial_recognition.register_user(user_id, images)
-    assert "registered" in message.lower()
+    msg = mock_facial_recognition.register_user(user_id, images)
+    assert "registered" in msg.lower()
     assert user_id in mock_facial_recognition.user_data
 
 def test_identify_user_known(mock_facial_recognition, mock_combined_model):
-    """Test identifying a known user."""
     user_id = "known_user"
-    # Put a known embedding in user_data
     mock_facial_recognition.user_data[user_id] = [np.array([0.1, 0.2, 0.3])]
-
-    # detect_and_embed returns something close to that known embedding
     mock_combined_model.detect_and_embed.return_value = [
         ((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))
     ]
-
-    # Pretend we have an image
     img_mock = MagicMock(spec=Image.Image)
     results = mock_facial_recognition.identify_user(img_mock)
     assert len(results) == 1
     assert results[0]["user_id"] == user_id
 
 def test_identify_user_unknown(mock_facial_recognition, mock_combined_model):
-    """Test identifying an unknown user."""
     user_id = "known_user"
-    # Put a known embedding in user_data
     mock_facial_recognition.user_data[user_id] = [np.array([0.1, 0.2, 0.3])]
-
-    # detect_and_embed returns something dissimilar
+    # Return a dissimilar embedding
     mock_combined_model.detect_and_embed.return_value = [
         ((10, 10, 100, 100), np.array([0.4, 0.5, 0.6]))
     ]
-
     img_mock = MagicMock(spec=Image.Image)
     results = mock_facial_recognition.identify_user(img_mock)
     assert len(results) == 1
     assert results[0]["user_id"] == "Unknown"
 
 def test_export_model(mock_facial_recognition, mock_combined_model, tmp_path):
-    """Test exporting the facial recognition model."""
     export_path = tmp_path / "exported_model.pt"
-
-    # Create some user data
     mock_facial_recognition.user_data["user1"] = [np.array([0.1, 0.2, 0.3])]
-
-    # Setup YOLO/facenet mock for state_dict
-    yolo_state_dict = {'yolo_layer': 'yolo_weights'}
-    facenet_state_dict = {'facenet_layer': 'facenet_weights'}
-    mock_combined_model.yolo.model.state_dict.return_value = yolo_state_dict
-    mock_combined_model.facenet.model.state_dict.return_value = facenet_state_dict
-
-    # Attempt the export
+    # Mock YOLO & facenet state
+    yolo_dict = {"yolo_layer": "yolo_weights"}
+    face_dict = {"facenet_layer": "facenet_weights"}
+    mock_combined_model.yolo.model.state_dict.return_value = yolo_dict
+    mock_combined_model.facenet.model.state_dict.return_value = face_dict
+    # Export
     mock_facial_recognition.export_combined_model(str(export_path))
-
-    # Because we mocked save_model, we just confirm it was called
     mock_combined_model.save_model.assert_called_once_with(str(export_path))
