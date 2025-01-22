@@ -47,23 +47,31 @@ jobs:
           name: built-python-package
           path: dist/**/*
 
-      # ------------------------
-      # Test step: updated
-      # ------------------------
+      # ----------------------------------------
+      # Debug step to see if tests/ folder exists
+      # ----------------------------------------
       - name: Debug: Show test files
         run: |
           echo "Current directory is %CD%"
+          echo "Listing top-level contents:"
           dir
-          echo "Now listing contents of 'tests' folder if present..."
+          echo "Listing 'tests' folder if present:"
           dir tests
           echo "Pytest --collect-only to see discovered tests:"
           python -m pytest tests --collect-only --disable-warnings -v
         shell: cmd
 
+      # ----------------------------------------
+      # Actual Test Run
+      # ----------------------------------------
       - name: Run tests
         run: |
-          REM Install the built package
+          REM Install the built package from dist
           for %%f in (dist\*.whl) do pip install %%f || exit 1
 
-          REM Install testing dependencies
-  
+          REM Install dev/test dependencies
+          pip install -r requirements-dev.txt
+
+          REM Run tests
+          python -m pytest tests --maxfail=1 --disable-warnings -v
+        shell: cmd
