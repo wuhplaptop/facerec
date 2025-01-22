@@ -6,46 +6,37 @@ import numpy as np
 from unittest.mock import MagicMock
 from PIL import Image
 
+# --------------------------------------------------------------
+# 1) Global patch so no real .pt file is loaded
+# --------------------------------------------------------------
+from unittest.mock import patch
+
+@pytest.fixture(scope="session", autouse=True)
+def patch_yolo_global():
+    """
+    Globally patch ultralytics so it never tries to read actual .pt files.
+    CombinedFacialRecognitionModel(...) won't crash with FileNotFoundError.
+    """
+    with patch("ultralytics.nn.tasks.attempt_load_one_weight", return_value=({}, None)):
+        yield
+
+# --------------------------------------------------------------
+# 2) Import your classes AFTER the patch is applied
+#    (So the patch affects them)
+# --------------------------------------------------------------
 from myfacerec.facial_recognition import FacialRecognition
 from myfacerec.data_store import UserDataStore
 from myfacerec.combined_model import CombinedFacialRecognitionModel
 
-# ---------------------------------------------------------------------
-# 1) Patching YOLO so it won't try to load any .pt file
-# ---------------------------------------------------------------------
-@pytest.fixture
-def patch_yolo(monkeypatch):
-    """
-    Patch the YOLO class so it doesn't load any actual weights file.
-    We'll override the entire constructor plus any relevant methods.
-    """
-
-    class DummyYOLO:
-        def __init__(self, model=None, task=None, verbose=True):
-            # do nothing
-            self.model = MagicMock()
-            self.model.state_dict = MagicMock(return_value={})
-            self.predict = MagicMock(return_value=[])
-            # if you call self(...) it might return results, but we will mock it in tests
-
-        def to(self, device):
-            return self
-
-        def __call__(self, image, *args, **kwargs):
-            # By default, return no detections. We'll override in each test
-            return []
-
-    monkeypatch.setattr("ultralytics.models.yolo.model.YOLO", DummyYOLO)
-
-# ---------------------------------------------------------------------
-# 2) A simple config
-# ---------------------------------------------------------------------
+# --------------------------------------------------------------
+# 3) Config fixture
+# --------------------------------------------------------------
 class MockConfig:
     def __init__(self):
         self.conf_threshold = 0.5
         self.similarity_threshold = 0.6
         self.user_data_path = "user_faces.json"
-        self.yolo_model_path = "fake_yolo_model.pt"  # won't actually load
+        self.yolo_model_path = "fake_yolo_model.pt"  # won't load due to patch
         self.device = "cpu"
         self.cache_dir = "cache"
         self.alignment_fn = None
@@ -54,32 +45,26 @@ class MockConfig:
 def mock_config():
     return MockConfig()
 
-# ---------------------------------------------------------------------
-# 3) Create a real CombinedFacialRecognitionModel
-#    but rely on the patched YOLO constructor
-# ---------------------------------------------------------------------
+# --------------------------------------------------------------
+# 4) Create a real CombinedFacialRecognitionModel,
+#    but we can mock out .yolo & .facenet
+# --------------------------------------------------------------
 @pytest.fixture
-def mock_combined_model(patch_yolo):
-    """
-    This fixture uses the patched YOLO, so it won't fail on missing .pt file.
-    Then we can still override model.yolo & model.facenet with Mocks.
-    """
+def mock_combined_model(mock_config):
     model = CombinedFacialRecognitionModel(
-        yolo_model_path="fake_yolo_model.pt",  # won't load due to patch
-        device="cpu",
-        conf_threshold=0.5
+        yolo_model_path=mock_config.yolo_model_path,
+        device=mock_config.device,
+        conf_threshold=mock_config.conf_threshold
     )
-    # Replace YOLO & Facenet with mocks
+    # Mock YOLO & Facenet so forward(...) sees no real logic
     model.yolo = MagicMock()
     model.facenet = MagicMock()
-
-    # user_embeddings is an empty dict by default
     model.user_embeddings = {}
     return model
 
-# ---------------------------------------------------------------------
-# 4) Data store fixture
-# ---------------------------------------------------------------------
+# --------------------------------------------------------------
+# 5) Data store
+# --------------------------------------------------------------
 @pytest.fixture
 def mock_data_store(mock_combined_model):
     data_store = MagicMock(spec=UserDataStore)
@@ -87,9 +72,9 @@ def mock_data_store(mock_combined_model):
     data_store.save_user_data.return_value = None
     return data_store
 
-# ---------------------------------------------------------------------
-# 5) FacialRecognition fixture
-# ---------------------------------------------------------------------
+# --------------------------------------------------------------
+# 6) FacialRecognition
+# --------------------------------------------------------------
 @pytest.fixture
 def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     fr = FacialRecognition(
@@ -99,16 +84,15 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     )
     return fr
 
-
-# ---------------------------------------------------------------------
-# 6) Tests that actually mock YOLO bounding boxes & Facenet embedding
-# ---------------------------------------------------------------------
+# --------------------------------------------------------------
+# 7) Tests
+# --------------------------------------------------------------
 
 def test_register_user(mock_facial_recognition):
     user_id = "test_user"
     images = [MagicMock(spec=Image.Image)]
 
-    # YOLO returns a single bounding box
+    # YOLO => 1 bounding box
     detection_mock = MagicMock()
     box_mock = MagicMock()
     box_mock.conf.item.return_value = 0.99
@@ -117,7 +101,7 @@ def test_register_user(mock_facial_recognition):
     detection_mock.boxes = [box_mock]
     mock_facial_recognition.model.yolo.return_value = [detection_mock]
 
-    # Facenet returns [0.1,0.2,0.3]
+    # Facenet => [0.1,0.2,0.3]
     mock_facial_recognition.model.facenet.return_value = torch.tensor([[0.1, 0.2, 0.3]])
 
     msg = mock_facial_recognition.register_user(user_id, images)
@@ -136,7 +120,6 @@ def test_identify_user_known(mock_facial_recognition):
     box_mock.xyxy = [torch.tensor([10, 10, 100, 100], dtype=torch.float)]
     detection_mock.boxes = [box_mock]
     mock_facial_recognition.model.yolo.return_value = [detection_mock]
-
     mock_facial_recognition.model.facenet.return_value = torch.tensor([[0.1, 0.2, 0.3]])
 
     results = mock_facial_recognition.identify_user(MagicMock(spec=Image.Image))
@@ -154,8 +137,6 @@ def test_identify_user_unknown(mock_facial_recognition):
     box_mock.xyxy = [torch.tensor([10, 10, 100, 100], dtype=torch.float)]
     detection_mock.boxes = [box_mock]
     mock_facial_recognition.model.yolo.return_value = [detection_mock]
-
-    # Return a dissimilar embedding => "Unknown"
     mock_facial_recognition.model.facenet.return_value = torch.tensor([[0.4, 0.5, 0.6]])
 
     results = mock_facial_recognition.identify_user(MagicMock(spec=Image.Image))
@@ -165,7 +146,5 @@ def test_identify_user_unknown(mock_facial_recognition):
 def test_export_model(mock_facial_recognition, tmp_path):
     export_path = tmp_path / "exported_model.pt"
     mock_facial_recognition.user_data["user1"] = [np.array([0.1, 0.2, 0.3])]
-
-    # Just ensure we can call export without crashing
     mock_facial_recognition.export_combined_model(str(export_path))
     mock_facial_recognition.model.save_model.assert_called_once_with(str(export_path))
