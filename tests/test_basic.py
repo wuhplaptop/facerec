@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from myfacerec.facial_recognition import FacialRecognition
 from myfacerec.data_store import UserDataStore
 from myfacerec.combined_model import CombinedFacialRecognitionModel
@@ -24,33 +24,31 @@ def mock_config():
 @pytest.fixture
 def mock_combined_model():
     """
-    MagicMock without 'spec=CombinedFacialRecognitionModel'
-    so we can mock __call__.side_effect without triggering
-    'method object has no attribute side_effect' errors.
+    Instead of using spec=CombinedFacialRecognitionModel, we'll create a generic MagicMock
+    and then replace __call__ with a MagicMock so we can set side_effect or return_value.
     """
-    # 1) Create a generic MagicMock (no spec)
     model = MagicMock()
 
-    # 2) Let .forward(...) return something
+    # 1) We want to call model.forward(...) or model.detect_and_embed(...)
+    #    so let's define default returns:
     model.forward.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
-
-    # 3) Make model(...) call model.forward(...)
-    #    This is how PyTorch usually works, but we can do it manually here.
-    model.__call__.side_effect = model.forward
-
-    # 4) If your tests do mock_combined_model.detect_and_embed.return_value = ...
-    #    define a default return:
     model.detect_and_embed.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
 
-    # 5) Mock user_embeddings, sub-attributes, etc.
+    # 2) Replace model.__call__ with a MagicMock so side_effect is available
+    model.__call__ = MagicMock()
+
+    # 3) By default, calling model(...) should produce model.forward.return_value
+    #    i.e. mimic PyTorch-like behavior
+    model.__call__.side_effect = lambda *args, **kwargs: model.forward(*args, **kwargs)
+
+    # 4) Mock user_embeddings and sub-objects (yolo, facenet)
     model.user_embeddings = {}
     model.yolo = MagicMock()
     model.facenet = MagicMock()
-
     model.yolo.model.state_dict.return_value = {'yolo_layer': 'yolo_weights'}
     model.facenet.model.state_dict.return_value = {'facenet_layer': 'facenet_weights'}
 
-    # 6) Mock save_model so it won’t do real file I/O
+    # 5) Mock save_model
     def _mock_save_model(save_path):
         pass
     model.save_model.side_effect = _mock_save_model
@@ -75,7 +73,7 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     return fr
 
 # ------------------------------------------------------------------------
-# Example tests that used to fail due to mocking issues:
+# Example tests that previously failed due to mocking issues
 # ------------------------------------------------------------------------
 
 def test_register_user(mock_facial_recognition, mock_combined_model):
