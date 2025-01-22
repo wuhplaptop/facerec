@@ -1,5 +1,3 @@
-# myfacerec/combined_model.py
-
 import torch
 import torch.nn as nn
 from ultralytics import YOLO
@@ -8,7 +6,6 @@ from PIL import Image
 import numpy as np
 import os
 from typing import Optional, List, Tuple, Dict
-import json
 
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(
@@ -115,9 +112,18 @@ class CombinedFacialRecognitionModel(nn.Module):
         # Load state dictionaries
         model.yolo.model.load_state_dict(state['yolo_state_dict'])
         model.facenet.load_state_dict(state['facenet_state_dict'])
-        model.user_embeddings = {user_id: [np.array(e) for e in emb_list] for user_id, emb_list in state['user_embeddings'].items()}
+        model.user_embeddings = {
+            user_id: [np.array(e) for e in emb_list]
+            for user_id, emb_list in state['user_embeddings'].items()
+        }
 
         model.to(device)
         model.eval()
         print(f"Combined model loaded from {load_path} on {device}.")
         return model
+
+    def detect_and_embed(self, image: Image.Image):  # <-- ADDED
+        """
+        Matches the method name expected by some tests, but simply calls forward().
+        """
+        return self.forward(image)
