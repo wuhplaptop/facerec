@@ -1,10 +1,13 @@
 # tests/test_basic.py
-
 import pytest
 import torch
 import numpy as np
 from unittest.mock import patch, MagicMock
 from PIL import Image
+
+# 1) We import the real YOLO 'Results' and 'Boxes' classes
+from ultralytics.yolo.engine.results import Results
+from ultralytics.yolo.engine.results import Boxes
 
 # -----------------------------------------------------------------
 # 1) Patch YOLO in myfacerec.combined_model so it won't do file IO
@@ -12,19 +15,28 @@ from PIL import Image
 @pytest.fixture(scope="session", autouse=True)
 def patch_model_yolo():
     """
-    Patch myfacerec.combined_model.YOLO with a MagicMock that won't load .pt files.
+    Patch myfacerec.combined_model.YOLO with a MagicMock so it never actually
+    loads a .pt file. We'll still replace the detection results with real
+    'Results' objects in each test.
     """
     with patch("myfacerec.combined_model.YOLO") as yolo_class:
         dummy_yolo = MagicMock()
+        # If code does .to(...), just return dummy_yolo
         dummy_yolo.to.return_value = dummy_yolo
+        # If code does .model.state_dict(), default return is empty dict
         dummy_yolo.model = MagicMock()
         dummy_yolo.model.state_dict.return_value = {}
-        # By default, dummy_yolo(image) => no detections
+
+        # If code calls dummy_yolo(image), by default return []
         dummy_yolo.__call__ = MagicMock(return_value=[])
+
+        # Make sure model_path is a real string (not MagicMock)
+        dummy_yolo.model_path = "fake_yolo_model.pt"
+
         yolo_class.return_value = dummy_yolo
         yield
 
-# Now import your code after the patch is in place
+# Now import the code after the patch is in place
 from myfacerec.facial_recognition import FacialRecognition
 from myfacerec.data_store import UserDataStore
 from myfacerec.combined_model import CombinedFacialRecognitionModel
@@ -47,16 +59,22 @@ def mock_config():
     return MockConfig()
 
 # -----------------------------------------------------------------
-# 3) Real CombinedFacialRecognitionModel (no real .pt loaded thanks to patch)
+# 3) Real CombinedFacialRecognitionModel
 # -----------------------------------------------------------------
 @pytest.fixture
 def mock_combined_model(mock_config):
+    """
+    Returns the real CombinedFacialRecognitionModel, but YOLO is patched above.
+    We'll produce real 'Results' objects in each test so forward(...) sees them.
+    """
     model = CombinedFacialRecognitionModel(
         yolo_model_path=mock_config.yolo_model_path,
         device=mock_config.device,
         conf_threshold=mock_config.conf_threshold
     )
-    # Keep real .yolo and .facenet submodules
+
+    # Also set model.facenet.model.state_dict => empty dict (prevents pickling mocks)
+    model.facenet.model.state_dict = lambda: {}
     return model
 
 # -----------------------------------------------------------------
@@ -81,35 +99,42 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     )
 
 # -----------------------------------------------------------------
+# Utility: build a real YOLO 'Results' object with conf, cls, box
+# -----------------------------------------------------------------
+def make_detection(conf=0.99, cls=0, xyxy=(10,10,100,100)):
+    """
+    Creates a real ultralytics 'Results' object with .boxes = real 'Boxes'
+    containing shape Nx6 => [x1, y1, x2, y2, conf, cls].
+    """
+    x1,y1,x2,y2 = xyxy
+    # shape [1,6]
+    data = torch.tensor([[x1, y1, x2, y2, conf, float(cls)]], dtype=torch.float)
+
+    # Create a real 'Boxes' object
+    b = Boxes(data)
+
+    # Put that inside a real 'Results' object
+    r = Results()
+    r.boxes = b
+    return r
+
+# -----------------------------------------------------------------
 # 6) Tests
 # -----------------------------------------------------------------
 
 def test_register_user(mock_facial_recognition):
     """
-    Mocks a single YOLO detection with conf=0.99, class=0, bounding box.
-    Mocks facenet.forward => embedding [0.1,0.2,0.3].
-    Expects "registered" message, not "No valid face embeddings found".
+    One real detection => should yield "registered".
     """
     user_id = "test_user"
     images = [MagicMock(spec=Image.Image)]
 
-    # YOLO => one bounding box with real Tensors
-    detection_mock = MagicMock()
-    box_mock = MagicMock()
+    # Build a real detection with conf=0.99, cls=0 => face
+    detection = make_detection(conf=0.99, cls=0, xyxy=(10,10,100,100))
+    # Override YOLO => returns [detection]
+    mock_facial_recognition.model.yolo.__call__.return_value = [detection]
 
-    # conf => shape [1], cls => shape [1]
-    box_mock.conf = torch.tensor([0.99])
-    box_mock.cls  = torch.tensor([0])
-    # xyxy => shape [1,4]
-    box_mock.xyxy = torch.tensor([[10, 10, 100, 100]], dtype=torch.float)
-
-    detection_mock.boxes = [box_mock]
-    # Override self.model.yolo(...) => returns this detection
-    mock_facial_recognition.model.yolo.__call__ = MagicMock(
-        return_value=[detection_mock]
-    )
-
-    # Facenet => real tensor embedding
+    # Facenet => real [0.1,0.2,0.3] embedding
     mock_facial_recognition.model.facenet.forward = MagicMock(
         return_value=torch.tensor([[0.1, 0.2, 0.3]])
     )
@@ -121,19 +146,15 @@ def test_register_user(mock_facial_recognition):
 
 def test_identify_user_known(mock_facial_recognition):
     """
-    If embedding matches known_user data => 1 result, user_id=known_user.
+    If embedding is close => recognized as 'known_user'.
     """
     user_id = "known_user"
     mock_facial_recognition.user_data[user_id] = [np.array([0.1, 0.2, 0.3])]
 
-    detection_mock = MagicMock()
-    box_mock = MagicMock()
-    box_mock.conf = torch.tensor([0.99])
-    box_mock.cls  = torch.tensor([0])
-    box_mock.xyxy = torch.tensor([[10, 10, 100, 100]], dtype=torch.float)
-    detection_mock.boxes = [box_mock]
+    detection = make_detection(conf=0.99, cls=0, xyxy=(10,10,100,100))
+    mock_facial_recognition.model.yolo.__call__.return_value = [detection]
 
-    mock_facial_recognition.model.yolo.__call__ = MagicMock(return_value=[detection_mock])
+    # Facenet => matching
     mock_facial_recognition.model.facenet.forward = MagicMock(
         return_value=torch.tensor([[0.1, 0.2, 0.3]])
     )
@@ -144,19 +165,15 @@ def test_identify_user_known(mock_facial_recognition):
 
 def test_identify_user_unknown(mock_facial_recognition):
     """
-    If embedding is dissimilar => "Unknown".
+    If embedding is dissimilar => 'Unknown'.
     """
     user_id = "known_user"
     mock_facial_recognition.user_data[user_id] = [np.array([0.1, 0.2, 0.3])]
 
-    detection_mock = MagicMock()
-    box_mock = MagicMock()
-    box_mock.conf = torch.tensor([0.99])
-    box_mock.cls  = torch.tensor([0])
-    box_mock.xyxy = torch.tensor([[10, 10, 100, 100]], dtype=torch.float)
-    detection_mock.boxes = [box_mock]
+    detection = make_detection(conf=0.99, cls=0, xyxy=(10,10,100,100))
+    mock_facial_recognition.model.yolo.__call__.return_value = [detection]
 
-    mock_facial_recognition.model.yolo.__call__ = MagicMock(return_value=[detection_mock])
+    # Facenet => dissimilar
     mock_facial_recognition.model.facenet.forward = MagicMock(
         return_value=torch.tensor([[0.4, 0.5, 0.6]])
     )
@@ -167,16 +184,16 @@ def test_identify_user_unknown(mock_facial_recognition):
 
 def test_export_model(mock_facial_recognition, tmp_path):
     """
-    Overriding yolo.model.state_dict() and facenet.state_dict() to real dict
-    avoids pickling Mocks. Then exporting should succeed.
+    Overriding yolo.model.state_dict() and facenet.state_dict() => real dict
+    ensures no pickling errors. Also set yolo.model_path to a real string.
     """
     export_path = tmp_path / "exported_model.pt"
     mock_facial_recognition.user_data["user1"] = [np.array([0.1, 0.2, 0.3])]
 
-    # Overwrite with real dict returning lambdas
+    # Ensure it won't try to pickle a MagicMock
     mock_facial_recognition.model.yolo.model.state_dict = lambda: {}
+    mock_facial_recognition.model.yolo.model_path = "fake_yolo_model.pt"
     mock_facial_recognition.model.facenet.state_dict = lambda: {}
 
     mock_facial_recognition.export_combined_model(str(export_path))
-    # If we get here, no pickling error
     mock_facial_recognition.model.save_model.assert_called_once_with(str(export_path))
