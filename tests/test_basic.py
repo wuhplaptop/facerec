@@ -6,31 +6,41 @@ import numpy as np
 from unittest.mock import MagicMock
 from PIL import Image
 
-# --------------------------------------------------------------
-# 1) Global patch so no real .pt file is loaded
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
+# 1) Patch our local YOLO import so it never tries to load real files
+# ---------------------------------------------------------------------
 from unittest.mock import patch
 
 @pytest.fixture(scope="session", autouse=True)
-def patch_yolo_global():
+def patch_model_yolo():
     """
-    Globally patch ultralytics so it never tries to read actual .pt files.
-    CombinedFacialRecognitionModel(...) won't crash with FileNotFoundError.
+    Globally patch `myfacerec.combined_model.YOLO` so it never tries
+    to load an actual .pt file.
     """
-    with patch("ultralytics.nn.tasks.attempt_load_one_weight", return_value=({}, None)):
+    with patch("myfacerec.combined_model.YOLO") as yolo_mock:
+        # Create a dummy YOLO instance
+        dummy_yolo = MagicMock()
+        dummy_yolo.to.return_value = dummy_yolo
+        dummy_yolo.model = MagicMock()
+        dummy_yolo.model.state_dict.return_value = {}
+        dummy_yolo.__call__.return_value = []
+
+        # So any time CombinedFacialRecognitionModel does `YOLO(...)`,
+        # it gets `dummy_yolo`.
+        yolo_mock.return_value = dummy_yolo
+
         yield
 
-# --------------------------------------------------------------
-# 2) Import your classes AFTER the patch is applied
-#    (So the patch affects them)
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
+# 2) Now import your classes after the patch
+# ---------------------------------------------------------------------
 from myfacerec.facial_recognition import FacialRecognition
 from myfacerec.data_store import UserDataStore
 from myfacerec.combined_model import CombinedFacialRecognitionModel
 
-# --------------------------------------------------------------
-# 3) Config fixture
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
+# 3) Mock config
+# ---------------------------------------------------------------------
 class MockConfig:
     def __init__(self):
         self.conf_threshold = 0.5
@@ -45,10 +55,9 @@ class MockConfig:
 def mock_config():
     return MockConfig()
 
-# --------------------------------------------------------------
-# 4) Create a real CombinedFacialRecognitionModel,
-#    but we can mock out .yolo & .facenet
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
+# 4) mock_combined_model uses the real constructor, but YOLO is patched
+# ---------------------------------------------------------------------
 @pytest.fixture
 def mock_combined_model(mock_config):
     model = CombinedFacialRecognitionModel(
@@ -56,15 +65,15 @@ def mock_combined_model(mock_config):
         device=mock_config.device,
         conf_threshold=mock_config.conf_threshold
     )
-    # Mock YOLO & Facenet so forward(...) sees no real logic
+    # We'll mock model.yolo & model.facenet for bounding boxes/embeddings
     model.yolo = MagicMock()
     model.facenet = MagicMock()
     model.user_embeddings = {}
     return model
 
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
 # 5) Data store
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
 @pytest.fixture
 def mock_data_store(mock_combined_model):
     data_store = MagicMock(spec=UserDataStore)
@@ -72,9 +81,9 @@ def mock_data_store(mock_combined_model):
     data_store.save_user_data.return_value = None
     return data_store
 
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
 # 6) FacialRecognition
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
 @pytest.fixture
 def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     fr = FacialRecognition(
@@ -84,10 +93,9 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
     )
     return fr
 
-# --------------------------------------------------------------
+# ---------------------------------------------------------------------
 # 7) Tests
-# --------------------------------------------------------------
-
+# ---------------------------------------------------------------------
 def test_register_user(mock_facial_recognition):
     user_id = "test_user"
     images = [MagicMock(spec=Image.Image)]
@@ -113,6 +121,7 @@ def test_identify_user_known(mock_facial_recognition):
     user_id = "known_user"
     mock_facial_recognition.user_data[user_id] = [np.array([0.1, 0.2, 0.3])]
 
+    # YOLO => 1 bounding box
     detection_mock = MagicMock()
     box_mock = MagicMock()
     box_mock.conf.item.return_value = 0.99
@@ -120,6 +129,8 @@ def test_identify_user_known(mock_facial_recognition):
     box_mock.xyxy = [torch.tensor([10, 10, 100, 100], dtype=torch.float)]
     detection_mock.boxes = [box_mock]
     mock_facial_recognition.model.yolo.return_value = [detection_mock]
+
+    # Facenet => matching embedding
     mock_facial_recognition.model.facenet.return_value = torch.tensor([[0.1, 0.2, 0.3]])
 
     results = mock_facial_recognition.identify_user(MagicMock(spec=Image.Image))
@@ -130,6 +141,7 @@ def test_identify_user_unknown(mock_facial_recognition):
     user_id = "known_user"
     mock_facial_recognition.user_data[user_id] = [np.array([0.1, 0.2, 0.3])]
 
+    # YOLO => 1 bounding box
     detection_mock = MagicMock()
     box_mock = MagicMock()
     box_mock.conf.item.return_value = 0.99
@@ -137,6 +149,8 @@ def test_identify_user_unknown(mock_facial_recognition):
     box_mock.xyxy = [torch.tensor([10, 10, 100, 100], dtype=torch.float)]
     detection_mock.boxes = [box_mock]
     mock_facial_recognition.model.yolo.return_value = [detection_mock]
+
+    # Facenet => dissimilar embedding => "Unknown"
     mock_facial_recognition.model.facenet.return_value = torch.tensor([[0.4, 0.5, 0.6]])
 
     results = mock_facial_recognition.identify_user(MagicMock(spec=Image.Image))
