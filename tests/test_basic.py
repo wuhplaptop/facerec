@@ -1,5 +1,3 @@
-# tests/test_basic.py
-
 import pytest
 from unittest.mock import MagicMock, patch
 from myfacerec.facial_recognition import FacialRecognition
@@ -31,29 +29,36 @@ def mock_combined_model():
     Mock CombinedFacialRecognitionModel instance using MagicMock with spec.
     The __call__ method is redirected to the mocked forward method.
     """
-    model = MagicMock(spec=CombinedFacialRecognitionModel)
-    
-    # Mock the forward method to return detections and embeddings
-    # Each detection is a tuple of (bounding_box, embedding)
+    # The 'spec=' ensures method signatures match the real class.
+    model = MagicMock(spec=CombinedFacialRecognitionModel)  # <-- CHANGED (still the same but keep it noted)
+
+    # Mock the forward method so that model(...) returns something
     model.forward.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]
-    
-    # Redirect __call__ to forward
     model.__call__.side_effect = model.forward
-    
+
+    # The tests do: mock_combined_model.detect_and_embed.return_value = ...
+    # So define detect_and_embed on the mock:
+    model.detect_and_embed.return_value = [((10, 10, 100, 100), np.array([0.1, 0.2, 0.3]))]  # <-- ADDED
+
     # Mock the user_embeddings attribute
     model.user_embeddings = {}
-    
+
     # Mock the yolo and facenet attributes with their own mocks
     model.yolo = MagicMock()
     model.facenet = MagicMock()
-    
+
     # Mock the state_dict method for yolo and facenet models
     model.yolo.model.state_dict.return_value = {'yolo_layer': 'yolo_weights'}
     model.facenet.model.state_dict.return_value = {'facenet_layer': 'facenet_weights'}
-    
-    # Mock the save_model method to prevent actual file operations
-    model.save_model.return_value = None
-    
+
+    # Mock the save_model method; it must accept two parameters:
+    # (self, save_path). By default, Python treats the first param as 'self'.
+    def _mock_save_model(save_path):  # <-- CHANGED
+        # No-op to prevent file IO
+        pass
+
+    model.save_model.side_effect = _mock_save_model  # <-- CHANGED
+
     return model
 
 @pytest.fixture
@@ -75,3 +80,6 @@ def mock_facial_recognition(mock_config, mock_combined_model, mock_data_store):
         model=mock_combined_model  # Injecting the mock model
     )
     return fr
+
+
+# ...the rest of your tests remain unchanged...
