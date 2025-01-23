@@ -6,9 +6,6 @@ import pkg_resources
 import requests
 
 class Config:
-    """
-    Central configuration object.
-    """
     def __init__(
         self,
         yolo_model_path=None,
@@ -25,7 +22,7 @@ class Config:
         detector_plugin=None,
         embedder_plugin=None,
         cache_dir=None,
-        enable_pose_estimation=False  # NEW
+        enable_pose_estimation=False
     ):
         self.yolo_model_path = yolo_model_path or self._default_model_path(default_model_url)
         self.default_model_url = default_model_url
@@ -34,25 +31,20 @@ class Config:
         self.device = device or self._auto_device()
         self.user_data_path = user_data_path
 
-        # Optional hooks
         self.alignment_fn = alignment_fn
         self.before_detect = before_detect
         self.after_detect = after_detect
         self.before_embed = before_embed
         self.after_embed = after_embed
 
-        # Plugins
         self.detector_plugin = detector_plugin
         self.embedder_plugin = embedder_plugin
 
-        # Caching
         self.cache_dir = cache_dir or os.path.expanduser("~/.myfacerec/cache")
         os.makedirs(self.cache_dir, exist_ok=True)
 
-        # NEW: pose estimation flag
         self.enable_pose_estimation = enable_pose_estimation
 
-        # Ensure YOLO model is present
         if not os.path.exists(self.yolo_model_path):
             self._download_default_yolo_model()
 
@@ -74,4 +66,19 @@ class Config:
             with open(save_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
-                        f.wr
+                        f.write(chunk)
+            logging.info(f"Default YOLO model downloaded and saved to {save_path}.")
+        except Exception as e:
+            logging.error(f"Failed to download YOLO model from {url}: {e}")
+            raise
+
+    def _download_default_yolo_model(self):
+        os.makedirs(os.path.dirname(self.yolo_model_path), exist_ok=True)
+        self._download_model(self.default_model_url, self.yolo_model_path)
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger(__name__)
