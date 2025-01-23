@@ -7,6 +7,7 @@ from .embedders import FacenetEmbedder
 from .data_store import JSONUserDataStore
 from .hooks import Hooks
 from .combined_model import CombinedFacialRecognitionModel
+from .pose_estimator import HeadPoseEstimator  # NEW IMPORT
 
 __all__ = [
     "FacialRecognition",
@@ -16,4 +17,5 @@ __all__ = [
     "JSONUserDataStore",
     "Hooks",
     "CombinedFacialRecognitionModel",
+    "HeadPoseEstimator"
 ]
