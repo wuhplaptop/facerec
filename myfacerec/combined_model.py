@@ -9,7 +9,8 @@ import numpy as np
 import os
 from typing import Optional, List, Tuple, Dict
 
-from .pose_estimator import HeadPoseEstimator  # NEW
+from .pose_estimator import HeadPoseEstimator  # If you have pose code
+# from .pose_estimator import HeadPoseEstimator
 
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(
@@ -18,12 +19,12 @@ class CombinedFacialRecognitionModel(nn.Module):
         facenet_model: Optional[InceptionResnetV1] = None,
         device: str = 'cpu',
         conf_threshold: float = 0.5,
-        enable_pose_estimation: bool = False  # NEW
+        enable_pose_estimation: bool = False
     ):
         super(CombinedFacialRecognitionModel, self).__init__()
         self.device = device
         self.conf_threshold = conf_threshold
-        self.enable_pose_estimation = enable_pose_estimation  # NEW
+        self.enable_pose_estimation = enable_pose_estimation
 
         # Initialize YOLO model
         self.yolo = YOLO(yolo_model_path)
@@ -35,7 +36,7 @@ class CombinedFacialRecognitionModel(nn.Module):
         else:
             self.facenet = facenet_model.eval().to(self.device)
 
-        # Pose estimator
+        # (Optional) Pose Estimator
         self.pose_estimator = HeadPoseEstimator() if self.enable_pose_estimation else None
 
         # User embeddings: Dict[user_id, List[np.ndarray]]
@@ -44,35 +45,25 @@ class CombinedFacialRecognitionModel(nn.Module):
     def forward(self, image: Image.Image):
         """
         Perform face detection, embedding, and optional pose estimation.
-
-        Returns:
-            A list of dicts: [
-              {
-                'box': (x1, y1, x2, y2),
-                'embedding': np.ndarray,
-                'pose': (yaw, pitch, roll) or None
-              },
-              ...
-            ]
+        Returns: list of dicts with keys: 'box', 'embedding', 'pose'
         """
-        # 1) Perform face detection
         detections = self.yolo(image)
         boxes = []
         for result in detections:
             for box in result.boxes:
                 conf = box.conf.item()
                 cls = int(box.cls.item())
-                if conf >= self.conf_threshold and cls == 0:  # class 0 is 'face'
+                if conf >= self.conf_threshold and cls == 0:  # class 0 = 'face'
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     boxes.append((int(x1), int(y1), int(x2), int(y2)))
 
-        # Convert image to np array for pose if needed
-        if self.enable_pose_estimation:
-            image_np = np.array(image)  # e.g. RGB
-
         outputs = []
+        image_np = None
+        if self.enable_pose_estimation:
+            image_np = np.array(image)
+
         for box in boxes:
-            # 2) Crop & embed
+            # Crop & prepare for FaceNet
             face = image.crop(box).resize((160, 160))
             face_np = np.array(face).astype(np.float32) / 255.0
             face_np = (face_np - 0.5) / 0.5
@@ -80,13 +71,12 @@ class CombinedFacialRecognitionModel(nn.Module):
             with torch.no_grad():
                 emb = self.facenet(face_tensor).cpu().numpy()[0]
 
-            # 3) If pose estimation is enabled, do it
+            # Optional pose
             pose = None
-            if self.enable_pose_estimation and self.pose_estimator:
-                # Placeholder for real 2D landmark detection:
-                face_landmarks_2d = self._dummy_landmark_detector(box, image_np)
-                if face_landmarks_2d is not None:
-                    pose = self.pose_estimator.estimate_pose(image_np, face_landmarks_2d)
+            if self.enable_pose_estimation and self.pose_estimator is not None:
+                # dummy or real landmark detection here
+                # pose = self.pose_estimator.estimate_pose(...)
+                pass
 
             outputs.append({
                 'box': box,
@@ -96,43 +86,20 @@ class CombinedFacialRecognitionModel(nn.Module):
 
         return outputs
 
-    def _dummy_landmark_detector(self, box, full_image_np):
-        """
-        Placeholder for a real 2D landmark detection method.
-        Returns np.ndarray of shape (6,2) or None if not detected.
-
-        You must replace this with a real landmark detector. 
-        """
-        # This is just a dummy example returning random points near the face center:
-        x1, y1, x2, y2 = box
-        w = x2 - x1
-        h = y2 - y1
-        if w < 10 or h < 10:
-            return None
-
-        # Return 6 random points for demonstration
-        points = []
-        center_x = x1 + w / 2
-        center_y = y1 + h / 2
-        for i in range(6):
-            px = center_x + (np.random.rand() - 0.5) * 0.3 * w
-            py = center_y + (np.random.rand() - 0.5) * 0.3 * h
-            points.append([px, py])
-        return np.array(points, dtype=np.float32)
-
     def save_model(self, save_path: str):
         """
-        Save the combined model and user embeddings to a .pt file.
+        Save the combined model + user embeddings to a .pt file.
+        Note: We call self.facenet.state_dict(), not self.facenet.model.state_dict().
         """
         state = {
             'yolo_state_dict': self.yolo.model.state_dict(),
-            'facenet_state_dict': self.facenet.state_dict(),
-            'user_embeddings': {uid: emb for uid, emb in self.user_embeddings.items()},
+            'facenet_state_dict': self.facenet.state_dict(),   # FIXED
+            'user_embeddings': self.user_embeddings,
             'config': {
-                'yolo_model_path': self.yolo.model_path if hasattr(self.yolo, 'model_path') else "",
+                'yolo_model_path': getattr(self.yolo, 'model_path', ""),
                 'conf_threshold': self.conf_threshold,
                 'device': self.device,
-                'enable_pose_estimation': self.enable_pose_estimation,
+                'enable_pose_estimation': self.enable_pose_estimation
             }
         }
         torch.save(state, save_path)
@@ -141,7 +108,8 @@ class CombinedFacialRecognitionModel(nn.Module):
     @classmethod
     def load_model(cls, load_path: str, device: str = 'cpu') -> "CombinedFacialRecognitionModel":
         """
-        Load the combined model and user embeddings from a .pt file.
+        Load from .pt file. We'll create a new YOLO + InceptionResnetV1
+        and then load the state dictionaries. 
         """
         state = torch.load(load_path, map_location=device)
         config = state['config']
@@ -149,7 +117,7 @@ class CombinedFacialRecognitionModel(nn.Module):
         conf_threshold = config.get('conf_threshold', 0.5)
         enable_pose_estimation = config.get('enable_pose_estimation', False)
 
-        # Initialize the model
+        # Initialize YOLO + FaceNet
         model = cls(
             yolo_model_path=yolo_model_path,
             device=device,
@@ -157,18 +125,20 @@ class CombinedFacialRecognitionModel(nn.Module):
             enable_pose_estimation=enable_pose_estimation
         )
 
-        # Load state dictionaries
+        # Load YOLO weights
         model.yolo.model.load_state_dict(state['yolo_state_dict'])
+
+        # Load FaceNet weights (NO .model, just self.facenet)
         model.facenet.load_state_dict(state['facenet_state_dict'])
-        model.user_embeddings = {
-            uid: [np.array(e) for e in emb_list]
-            for uid, emb_list in state['user_embeddings'].items()
-        }
+
+        # User embeddings
+        model.user_embeddings = state['user_embeddings']
 
         model.to(device)
         model.eval()
         print(f"Combined model loaded from {load_path} on {device}. Pose estimation = {enable_pose_estimation}.")
         return model
+
 
     def detect_and_embed(self, image: Image.Image):
         """
