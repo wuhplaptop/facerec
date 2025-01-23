@@ -5,15 +5,14 @@ import sys
 from PIL import Image
 import shutil
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import torch
-import numpy as np
 
 from .config import Config
 from .facial_recognition import FacialRecognition
 from .hooks import Hooks
 from .combined_model import CombinedFacialRecognitionModel
 from .data_store import JSONUserDataStore
+from .training import train_yolo, train_facenet  # NEW
 
 def main():
     parser = argparse.ArgumentParser(
@@ -21,6 +20,12 @@ def main():
         description="MyFaceRec: Modular and Extensible Facial Recognition Tool."
     )
     subparsers = parser.add_subparsers(dest="command")
+
+    # -------------------------------------------------------------------------
+    # Common arguments for some subcommands
+    # -------------------------------------------------------------------------
+    # Because many commands might want to enable/disable pose:
+    parser.add_argument("--enable-pose", action="store_true", help="Enable head pose estimation.")
 
     # -------------------------------------------------------------------------
     # Register command
@@ -57,40 +62,39 @@ def main():
     import_model_parser.add_argument("--yolo-model", default=None, help="Path or URL to YOLO model (.pt). If not set, default model is used.")
 
     # -------------------------------------------------------------------------
-    # Upload model (Optional)
+    # Train command (new)
     # -------------------------------------------------------------------------
-    # [Implementation for upload-model can be added here if required.]
+    train_parser = subparsers.add_parser("train", help="Train or fine-tune YOLO or FaceNet.")
+    train_parser.add_argument("--model-type", choices=["yolo", "facenet"], default="facenet",
+                             help="Which model to train/fine-tune.")
+    train_parser.add_argument("--data-dir", required=True, help="Path to the dataset for training.")
+    train_parser.add_argument("--epochs", type=int, default=5, help="Number of epochs.")
+    train_parser.add_argument("--batch-size", type=int, default=16, help="Batch size.")
+    train_parser.add_argument("--save-path", default="trained_model.pt", help="Where to save the trained model weights.")
+    # (Add more training args as needed)
 
     # -------------------------------------------------------------------------
-    # Download model (Optional)
+    # Parse
     # -------------------------------------------------------------------------
-    # [Implementation for download-model can be added here if required.]
-
-    # -------------------------------------------------------------------------
-    # Other existing commands (export-data, import-data, list-users, delete-user)
-    # -------------------------------------------------------------------------
-    # [Include existing commands here, omitted for brevity]
-
     args = parser.parse_args()
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
-    if args.command in ["register", "identify", "export-model", "import-model"]:
-        # Initialize configuration
-        config = Config(
-            yolo_model_path=args.yolo_model,
-            conf_threshold=args.conf if hasattr(args, 'conf') else 0.5,
-            device="cuda" if torch.cuda.is_available() else "cpu"
-        )
+    # Build config object (common for all commands)
+    config = Config(
+        yolo_model_path=args.yolo_model if hasattr(args, "yolo_model") else None,
+        conf_threshold=args.conf if hasattr(args, "conf") else 0.5,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        enable_pose_estimation=args.enable_pose  # pass the pose flag
+    )
 
     # Handle commands
     if args.command == "register":
-        # Initialize FacialRecognition
         fr = FacialRecognition(config)
 
-        # If an existing combined model is provided, import it
+        # If an existing combined model is provided (output_model) and it exists, import it
         if args.output_model and os.path.exists(args.output_model):
             fr = FacialRecognition.import_combined_model(args.output_model, config)
 
@@ -115,44 +119,44 @@ def main():
             fr.export_combined_model(args.output_model)
 
     elif args.command == "identify":
-        # Load the combined model
         if args.input_model and os.path.exists(args.input_model):
             fr = FacialRecognition.import_combined_model(args.input_model, config)
         else:
             fr = FacialRecognition(config)
 
-        # Load image
         try:
             img = Image.open(args.image).convert("RGB")
         except Exception as e:
             print(f"[Error] Failed to open image {args.image}: {e}")
             sys.exit(1)
 
-        # Identify
         results = fr.identify_user(img, threshold=args.threshold)
         for res in results:
-            print(f"Face {res['face_id']}: User='{res['user_id']}', Similarity={res['similarity']:.2f}")
+            face_id = res['face_id']
+            user_id = res['user_id']
+            sim = res['similarity']
+            box = res['box']
+            pose = res['pose']
+            print(f"Face {face_id}: User='{user_id}', Similarity={sim:.2f}, Box={box}, Pose={pose}")
 
     elif args.command == "export-model":
-        # Initialize FacialRecognition
         fr = FacialRecognition(config)
-
-        # If an existing combined model is provided, import it
         if args.input_model and os.path.exists(args.input_model):
             fr = FacialRecognition.import_combined_model(args.input_model, config)
-
-        # Export the combined model
         fr.export_combined_model(args.output_path)
 
     elif args.command == "import-model":
-        # Import the combined model
         fr = FacialRecognition.import_combined_model(args.input_path, config)
         print(f"Combined model imported from {args.input_path}.")
 
+    elif args.command == "train":
+        if args.model_type == "yolo":
+            train_yolo(data_dir=args.data_dir, epochs=args.epochs, batch_size=args.batch_size, save_path=args.save_path)
+        else:
+            train_facenet(data_dir=args.data_dir, epochs=args.epochs, batch_size=args.batch_size, save_path=args.save_path)
+
     else:
-        # Handle other commands here
-        # [Implementation for other commands]
-        pass
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
