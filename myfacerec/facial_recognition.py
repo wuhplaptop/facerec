@@ -4,7 +4,7 @@ import os
 import logging
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Dict, Any
 from PIL import Image
 
 from .config import Config, logger
@@ -23,14 +23,6 @@ class FacialRecognition:
         data_store: Optional[UserDataStore] = None,
         model: Optional[CombinedFacialRecognitionModel] = None
     ):
-        """
-        Initialize the FacialRecognition class with the combined model and data store.
-
-        Args:
-            config (Config): Configuration object.
-            data_store (UserDataStore, optional): Custom data store.
-            model (CombinedFacialRecognitionModel, optional): Custom combined model for testing.
-        """
         self.config = config
         self.logger = logger
 
@@ -40,32 +32,27 @@ class FacialRecognition:
         self.logger.info("Data store initialized with %d users.", len(self.user_data))
 
         # Initialize Combined Model
-        self.model = model or CombinedFacialRecognitionModel(
-            yolo_model_path=self.config.yolo_model_path,
-            device=self.config.device,
-            conf_threshold=self.config.conf_threshold
-        )
+        if model is not None:
+            self.model = model
+        else:
+            self.model = CombinedFacialRecognitionModel(
+                yolo_model_path=self.config.yolo_model_path,
+                device=self.config.device,
+                conf_threshold=self.config.conf_threshold,
+                enable_pose_estimation=self.config.enable_pose_estimation  # NEW
+            )
         self.model.user_embeddings = self.user_data
 
     def register_user(self, user_id: str, images: List[Image.Image]) -> str:
-        """
-        Register a user with their face embeddings.
-
-        Args:
-            user_id (str): Unique identifier for the user.
-            images (List[PIL.Image.Image]): List of images containing the user's face.
-
-        Returns:
-            str: Registration status message.
-        """
         collected_embeddings = []
         for idx, img in enumerate(images):
             try:
-                results = self.model(img)
+                results = self.model(img)  # Each item: { 'box', 'embedding', 'pose' }
                 self.logger.info(f"Processing image {idx + 1}: Detected {len(results)} face(s).")
 
+                # Simple logic: Only proceed if exactly 1 face was found
                 if len(results) == 1:
-                    _, emb = results[0]
+                    emb = results[0]['embedding']
                     collected_embeddings.append(emb)
                     self.logger.info(f"Image {idx + 1}: Collected embedding.")
                 elif len(results) > 1:
@@ -90,66 +77,54 @@ class FacialRecognition:
         return message
 
     def identify_user(self, image: Image.Image, threshold: float = 0.6) -> List[Dict[str, Any]]:
-        """
-        Identify users based on faces in the provided image.
-
-        Args:
-            image (PIL.Image.Image): Input image.
-            threshold (float): Similarity threshold for identification.
-
-        Returns:
-            List[Dict[str, Any]]: List of identification results with user IDs and similarity scores.
-        """
         try:
             results = self.model(image)
         except Exception as e:
             self.logger.error(f"Error during face detection and embedding: {e}")
             return []
 
-        embeddings = [emb for _, emb in results]
-        return self._identify_embeddings(embeddings, threshold)
+        # Now we have a list of { 'box', 'embedding', 'pose' }
+        embeddings = [res['embedding'] for res in results]
+        boxes = [res['box'] for res in results]
+        poses = [res['pose'] for res in results]  # might be None if disabled
+
+        identifications = self._identify_embeddings(embeddings, threshold)
+        # Combine the identification results with bounding boxes & poses
+        combined_results = []
+        for i, ident in enumerate(identifications):
+            combined_results.append({
+                'face_id': i + 1,
+                'user_id': ident['user_id'],
+                'similarity': ident['similarity'],
+                'box': boxes[i],
+                'pose': poses[i],
+            })
+
+        return combined_results
 
     def _identify_embeddings(self, embeddings: List[np.ndarray], threshold: float) -> List[Dict[str, Any]]:
-        """
-        Identify users based on the provided embeddings.
-
-        Args:
-            embeddings (List[np.ndarray]): List of face embeddings to identify.
-            threshold (float): Similarity threshold.
-
-        Returns:
-            List[Dict[str, Any]]: Identification results.
-        """
         results = []
-        for idx, emb in enumerate(embeddings):
+        for emb in embeddings:
             best_match = None
             best_sim = 0.0
 
             for user_id, user_embs in self.user_data.items():
                 if not user_embs:
                     continue
-                sims = cosine_similarity([emb], user_embs)  # Shape: (1, num_user_embeddings)
+                sims = cosine_similarity([emb], user_embs)  # shape: (1, N)
                 max_sim = sims.max()
                 if max_sim > best_sim:
                     best_sim = max_sim
                     best_match = user_id
 
             if best_sim >= threshold:
-                results.append({'face_id': idx + 1, 'user_id': best_match, 'similarity': float(best_sim)})
-                self.logger.info(f"Face {idx + 1}: Matched with user '{best_match}' (Similarity: {best_sim:.2f}).")
+                results.append({'user_id': best_match, 'similarity': float(best_sim)})
             else:
-                results.append({'face_id': idx + 1, 'user_id': 'Unknown', 'similarity': float(best_sim)})
-                self.logger.info(f"Face {idx + 1}: No match found (Highest Similarity: {best_sim:.2f}).")
+                results.append({'user_id': 'Unknown', 'similarity': float(best_sim)})
 
         return results
 
     def export_combined_model(self, save_path: str) -> None:
-        """
-        Export the combined facial recognition model.
-
-        Args:
-            save_path (str): Path to save the exported model.
-        """
         try:
             self.model.save_model(save_path)
             self.logger.info(f"Combined model exported to {save_path}.")
@@ -159,16 +134,6 @@ class FacialRecognition:
 
     @classmethod
     def import_combined_model(cls, load_path: str, config: Optional[Config] = None) -> "FacialRecognition":
-        """
-        Import a combined facial recognition model from a .pt file.
-
-        Args:
-            load_path (str): Path to the exported model file.
-            config (Config, optional): Configuration object. If not provided, defaults are used.
-
-        Returns:
-            FacialRecognition: Initialized FacialRecognition instance with imported state.
-        """
         try:
             model = CombinedFacialRecognitionModel.load_model(load_path)
             user_data = model.user_embeddings
@@ -177,11 +142,11 @@ class FacialRecognition:
                 config = Config(
                     yolo_model_path=model.yolo.model_path if hasattr(model.yolo, 'model_path') else "myfacerec/models/face.pt",
                     conf_threshold=model.conf_threshold,
-                    device=model.device
+                    device=model.device,
+                    enable_pose_estimation=model.enable_pose_estimation  # preserve pose
                 )
 
-            fr = cls(config=config)
-            fr.model = model
+            fr = cls(config=config, model=model)
             fr.user_data = user_data
             fr.data_store.save_user_data(fr.user_data)
             fr.logger.info(f"Combined model imported from {load_path}.")
