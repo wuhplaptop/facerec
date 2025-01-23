@@ -33,7 +33,7 @@ def patch_model_yolo():
         yield
 
 # ------------------------------------------------------------------
-# 2) Import your code after the YOLO patch
+# 2) Import code under test (AFTER the YOLO patch is in place)
 # ------------------------------------------------------------------
 from myfacerec.facial_recognition import FacialRecognition
 from myfacerec.data_store import UserDataStore
@@ -45,7 +45,7 @@ from myfacerec.combined_model import CombinedFacialRecognitionModel
 class FakeBox:
     """
     Minimal bounding box object that has .conf, .cls, .xyxy
-    as Tensors. Enough for your real code to do:
+    as Tensors. Enough for your code to do:
         conf = box.conf.item()
         cls  = int(box.cls.item())
         x1, y1, x2, y2 = box.xyxy[0]
@@ -77,6 +77,9 @@ class MockConfig:
         self.cache_dir = "cache"
         self.alignment_fn = None
 
+        # If you want to test pose, set this to True in a specific test
+        self.enable_pose_estimation = False
+
 @pytest.fixture
 def mock_config():
     return MockConfig()
@@ -93,7 +96,8 @@ def mock_combined_model(mock_config):
     model = CombinedFacialRecognitionModel(
         yolo_model_path=mock_config.yolo_model_path,
         device=mock_config.device,
-        conf_threshold=mock_config.conf_threshold
+        conf_threshold=mock_config.conf_threshold,
+        enable_pose_estimation=mock_config.enable_pose_estimation
     )
 
     # Make facenet.model.state_dict return a real dict
@@ -150,6 +154,7 @@ def test_register_user(mock_facial_recognition):
     assert user_id in mock_facial_recognition.user_data
     assert len(mock_facial_recognition.user_data[user_id]) == 1
 
+
 def test_identify_user_known(mock_facial_recognition):
     """
     If embedding matches known_user => results[0]['user_id'] == known_user
@@ -169,6 +174,9 @@ def test_identify_user_known(mock_facial_recognition):
     results = mock_facial_recognition.identify_user(MagicMock(spec=Image.Image))
     assert len(results) == 1, f"Expected 1 face, got {len(results)}"
     assert results[0]["user_id"] == user_id
+    # Also confirm similarity is close to 1.0
+    assert results[0]["similarity"] > 0.99
+
 
 def test_identify_user_unknown(mock_facial_recognition):
     """
@@ -189,20 +197,66 @@ def test_identify_user_unknown(mock_facial_recognition):
     results = mock_facial_recognition.identify_user(MagicMock(spec=Image.Image))
     assert len(results) == 1
     assert results[0]["user_id"] == "Unknown"
+    # Check that we got some best_sim < 0.6
+    assert results[0]["similarity"] < 0.6
+
 
 def test_export_model(mock_facial_recognition, tmp_path):
     """
     Overriding yolo.model.state_dict() and facenet.model.state_dict() => real dict,
     plus ensuring yolo.model_path is a real str => no pickling error.
+    We also wrap save_model in a patch to confirm it was called.
     """
     export_path = tmp_path / "exported_model.pt"
     mock_facial_recognition.user_data["user1"] = [np.array([0.1, 0.2, 0.3])]
 
-    # Overwrite real dict returning lambdas
+    # Overwrite the real model state dict with a real dict
     mock_facial_recognition.model.yolo.model.state_dict = lambda: {}
     mock_facial_recognition.model.yolo.model_path = "fake_yolo_model.pt"
-    # Already done in fixture: model.facenet.model.state_dict = lambda: {}
 
-    mock_facial_recognition.export_combined_model(str(export_path))
-    # If we get here, no pickling error
-    mock_facial_recognition.model.save_model.assert_called_once_with(str(export_path))
+    # Now wrap the real 'save_model' so we can assert calls
+    with patch.object(
+        mock_facial_recognition.model,
+        'save_model',
+        wraps=mock_facial_recognition.model.save_model
+    ) as mock_save:
+        mock_facial_recognition.export_combined_model(str(export_path))
+        mock_save.assert_called_once_with(str(export_path))
+
+#
+# ------------------------------------------------------------------
+# OPTIONAL: Example test for pose estimation
+# ------------------------------------------------------------------
+#
+
+def test_pose_estimation_enabled(mock_config, mock_data_store):
+    """
+    Demonstrates how you might test that 'pose' is computed
+    (using the _dummy_landmark_detector) if enable_pose_estimation=True.
+    """
+    from myfacerec.facial_recognition import FacialRecognition
+    from myfacerec.combined_model import CombinedFacialRecognitionModel
+
+    # Enable pose
+    mock_config.enable_pose_estimation = True
+
+    # Build a fresh model/FR
+    model = CombinedFacialRecognitionModel(
+        yolo_model_path=mock_config.yolo_model_path,
+        device=mock_config.device,
+        conf_threshold=mock_config.conf_threshold,
+        enable_pose_estimation=True
+    )
+    # Patch out the _dummy_landmark_detector or YOLO, etc.
+    model.yolo.__call__.return_value = [FakeDetection([FakeBox()])]
+    # Return some dummy embedding
+    model.facenet.forward = MagicMock(return_value=torch.tensor([[0.1, 0.2, 0.3]]))
+
+    # Create the FR object
+    fr = FacialRecognition(config=mock_config, data_store=mock_data_store, model=model)
+
+    # Now run identify or register
+    result = fr.identify_user(MagicMock(spec=Image.Image))
+    assert len(result) == 1
+    # 'pose' should not be None if everything works
+    assert result[0]['pose'] is not None, "Pose should be estimated when enable_pose_estimation=True."
