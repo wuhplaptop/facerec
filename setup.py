@@ -3,7 +3,6 @@
 from setuptools import setup, find_packages
 import os
 
-# Read the README.md for long description
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
@@ -14,12 +13,12 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="wuhp",
-    author_email="your-email@example.com",  # Replace with your actual email
-    url="https://github.com/wuhplaptop/facerec",  # Replace with your actual repository URL
+    author_email="your-email@example.com",
+    url="https://github.com/wuhplaptop/facerec",
     packages=find_packages(),
-    include_package_data=True,  # Include package data as specified in MANIFEST.in
+    include_package_data=True,
     package_data={
-        'myfacerec': ['models/*.pt'],  # Include all .pt files in myfacerec/models/
+        'myfacerec': ['models/*.pt'],
     },
     install_requires=[
         "requests",
@@ -29,12 +28,12 @@ setup(
         "scikit-learn",
         "ultralytics",
         "facenet-pytorch",
+        "opencv-python",  # For pose estimation
     ],
     extras_require={
         "dev": [
             "pytest",
             "pytest-mock",
-            # Add other development/testing dependencies here
         ],
     },
     python_requires=">=3.9",
@@ -43,26 +42,23 @@ setup(
             "rolo-rec=myfacerec.cli:main",
         ],
         "myfacerec.detectors": [
-            # Example: "yolo_face=myfacerec.detectors:YOLOFaceDetector",
-            # Users can add their custom detectors here
+            # "yolo_face=myfacerec.detectors:YOLOFaceDetector",
         ],
         "myfacerec.embedders": [
-            # Example: "facenet=myfacerec.embedders:FacenetEmbedder",
-            # Users can add their custom embedders here
+            # "facenet=myfacerec.embedders:FacenetEmbedder",
         ],
         "myfacerec.data_stores": [
-            # Example: "json_store=myfacerec.data_store:JSONUserDataStore",
-            # Users can add their custom data stores here
+            # "json_store=myfacerec.data_store:JSONUserDataStore",
         ],
     },
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",  # Replace with your actual license if different
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    license="MIT",  # Replace with your actual license if different
+    license="MIT",
     keywords="facial recognition yolo facenet",
     project_urls={
         "Bug Tracker": "https://github.com/wuhplaptop/facerec/issues",
