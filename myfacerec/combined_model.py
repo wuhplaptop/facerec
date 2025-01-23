@@ -1,3 +1,5 @@
+# myfacerec/combined_model.py
+
 import torch
 import torch.nn as nn
 from ultralytics import YOLO
@@ -7,17 +9,21 @@ import numpy as np
 import os
 from typing import Optional, List, Tuple, Dict
 
+from .pose_estimator import HeadPoseEstimator  # NEW
+
 class CombinedFacialRecognitionModel(nn.Module):
     def __init__(
         self, 
         yolo_model_path: str = "myfacerec/models/face.pt",
         facenet_model: Optional[InceptionResnetV1] = None,
         device: str = 'cpu',
-        conf_threshold: float = 0.5
+        conf_threshold: float = 0.5,
+        enable_pose_estimation: bool = False  # NEW
     ):
         super(CombinedFacialRecognitionModel, self).__init__()
         self.device = device
         self.conf_threshold = conf_threshold
+        self.enable_pose_estimation = enable_pose_estimation  # NEW
 
         # Initialize YOLO model
         self.yolo = YOLO(yolo_model_path)
@@ -29,41 +35,44 @@ class CombinedFacialRecognitionModel(nn.Module):
         else:
             self.facenet = facenet_model.eval().to(self.device)
 
-        # User embeddings: Dict[str, List[np.ndarray]]
+        # Pose estimator
+        self.pose_estimator = HeadPoseEstimator() if self.enable_pose_estimation else None
+
+        # User embeddings: Dict[user_id, List[np.ndarray]]
         self.user_embeddings: Dict[str, List[np.ndarray]] = {}
 
-    def forward(self, image: Image.Image) -> List[Tuple[Tuple[int, int, int, int], np.ndarray]]:
+    def forward(self, image: Image.Image):
         """
-        Perform face detection and embedding extraction.
-
-        Args:
-            image (PIL.Image): Input image.
+        Perform face detection, embedding, and optional pose estimation.
 
         Returns:
-            List of tuples: Each tuple contains bounding box coordinates and the corresponding embedding.
+            A list of dicts: [
+              {
+                'box': (x1, y1, x2, y2),
+                'embedding': np.ndarray,
+                'pose': (yaw, pitch, roll) or None
+              },
+              ...
+            ]
         """
-        # Perform face detection
+        # 1) Perform face detection
         detections = self.yolo(image)
         boxes = []
         for result in detections:
             for box in result.boxes:
                 conf = box.conf.item()
                 cls = int(box.cls.item())
-                if conf >= self.conf_threshold and cls == 0:  # Assuming class 0 is 'face'
+                if conf >= self.conf_threshold and cls == 0:  # class 0 is 'face'
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     boxes.append((int(x1), int(y1), int(x2), int(y2)))
 
-        embeddings = []
-        for box in boxes:
-            face = image.crop(box).resize((160, 160))
-            face_np = np.array(face).astype(np.float32) / 255.0
-            face_np = (face_np - 0.5) / 0.5
-            face_tensor = torch.from_numpy(face_np).permute(2, 0, 1).unsqueeze(0).to(self.device)
-            with torch.no_grad():
-                emb = self.facenet(face_tensor).cpu().numpy()[0]
-            embeddings.append(emb)
+        # Convert image to np array for pose if needed
+        if self.enable_pose_estimation:
+            image_np = np.array(image)  # e.g. RGB
 
-        return list(zip(boxes, embeddings))
+        outputs = []
+        for 
+
 
     def save_model(self, save_path: str):
         """
