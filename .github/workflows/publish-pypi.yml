@@ -16,7 +16,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest  # You can change this to ubuntu-latest if preferred
+    runs-on: windows-latest
 
     steps:
       # 1. Checkout the repository code
@@ -89,13 +89,15 @@ jobs:
           for %%f in (dist\*.whl) do pip install %%f || exit 1
           REM Install testing dependencies
           pip install -r requirements-dev.txt
+          REM Set PYTHONPATH
+          set PYTHONPATH=%cd%
           REM Run tests
           pytest tests/
         shell: cmd
 
   publish:
     needs: build
-    runs-on: windows-latest  # Ensure this matches the build job's runner
+    runs-on: windows-latest
     if: >
       ${{ 
         (github.event_name == 'release' && github.event.action == 'published') ||
