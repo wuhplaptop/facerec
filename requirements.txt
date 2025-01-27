@@ -1,7 +1,0 @@
-requests
-numpy
-torch
-Pillow
-scikit-learn
-ultralytics
-facenet-pytorch
