@@ -1,0 +1,2 @@
+include face_pipeline/models/*.pt
+include face_pipeline/config.pkl
