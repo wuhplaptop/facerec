@@ -8,7 +8,7 @@ from face_pipeline.core import FacePipeline
 
 class TestFacePipeline(unittest.TestCase):
     def setUp(self):
-        self.config = PipelineConfig()
+        self.config = PipelineConfig.load('face_pipeline/config.pkl')
         self.pipeline = FacePipeline(self.config)
         self.pipeline.initialize()
 
