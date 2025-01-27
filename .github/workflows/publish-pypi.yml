@@ -16,7 +16,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-latest  # You can change this to ubuntu-latest if preferred
 
     steps:
       # 1. Checkout the repository code
@@ -27,7 +27,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # Updated to Python 3.11
+          python-version: '3.11'  # Use the Python version you require
 
       # 3. Install runtime dependencies
       - name: Install Python dependencies
@@ -42,24 +42,25 @@ jobs:
         run: |
           if exist build rmdir /s /q build
           if exist dist rmdir /s /q dist
-          if exist rolo_rec.egg-info rmdir /s /q rolo_rec.egg-info
+          if exist face_pipeline.egg-info rmdir /s /q face_pipeline.egg-info
         shell: cmd
 
-      # 5. Download 'face.pt' if not already present
-      - name: Download face.pt
+      # 5. Download 'face2.pt' model if not already present
+      - name: Download face2.pt model
         shell: pwsh  # Use PowerShell
         run: |
-          $path = "myfacerec\models"
-          if (!(Test-Path -Path $path)) {
-            New-Item -ItemType Directory -Path $path | Out-Null
-            Write-Output "Created directory: $path"
+          $model_dir = "face_pipeline\models"
+          $model_path = "$model_dir\face2.pt"
+          if (!(Test-Path -Path $model_path)) {
+            New-Item -ItemType Directory -Path $model_dir -Force | Out-Null
+            Write-Output "Created directory: $model_dir"
+            
+            # Download the 'face2.pt' model
+            Invoke-WebRequest -Uri "https://github.com/wuhplaptop/face-11-n/blob/main/face2.pt?raw=true" -OutFile $model_path
+            Write-Output "Downloaded face2.pt to $model_path"
           } else {
-            Write-Output "Directory already exists: $path"
+            Write-Output "Model already exists at $model_path"
           }
-          
-          # Download the 'face.pt' model
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/wuhplaptop/facerec/main/myfacerec/models/face.pt" -OutFile "myfacerec\models\face.pt"
-          Write-Output "Downloaded face.pt to myfacerec\models\face.pt"
 
       # 6. Build the Python package (source and wheel distributions)
       - name: Build Python package
@@ -94,7 +95,7 @@ jobs:
 
   publish:
     needs: build
-    runs-on: windows-latest
+    runs-on: windows-latest  # Ensure this matches the build job's runner
     if: >
       ${{ 
         (github.event_name == 'release' && github.event.action == 'published') ||
@@ -119,7 +120,7 @@ jobs:
           python-version: '3.11'  # Ensure consistent Python version
 
       # 4. Install twine for uploading the package to PyPI
-      - name: Install Python dependencies
+      - name: Install twine
         run: |
           python -m pip install --upgrade pip
           pip install twine
