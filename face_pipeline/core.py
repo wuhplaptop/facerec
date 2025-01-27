@@ -1,23 +1,14 @@
 # face_pipeline/core.py
 
 import os
-import sys
-import argparse
-import math
-import requests
+import logging
 import numpy as np
-from PIL import Image
+import cv2
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, field
-from collections import Counter
-import logging
-import pickle
-import cv2
-import torch
-from ultralytics import YOLO
-from facenet_pytorch import InceptionResnetV1
-from torchvision import transforms
 from deep_sort_realtime.deepsort_tracker import DeepSort
+from facenet_pytorch import InceptionResnetV1
+from ultralytics import YOLO
 import mediapipe as mp
 
 from .config import PipelineConfig
@@ -36,8 +27,6 @@ from .utilities import (
 )
 
 logger = logging.getLogger(__name__)
-
-# ... [Other constants and initializations]
 
 @dataclass
 class FacePipeline:
@@ -203,7 +192,10 @@ class FacePipeline:
 
             return annotated_frame, results
 
-        # Moved outside of process_frame
+        except Exception as e:
+            logger.error(f"Error processing frame: {str(e)}")
+            return frame, []
+
     def is_real_face(self, face_roi: np.ndarray) -> bool:
         try:
             gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
