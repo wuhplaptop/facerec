@@ -1,68 +1,40 @@
 # setup.py
 
 from setuptools import setup, find_packages
-import os
-
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
 
 setup(
-    name="rolo-rec",  # Renamed to "rolo-rec" for PyPI
-    version="0.5.0",
-    description="Future-proof Facial Recognition with YOLO + Facenet, modular detectors/embedders, hooks, CLI, etc.",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    author="wuhp",
-    author_email="your-email@example.com",
-    url="https://github.com/wuhplaptop/facerec",
+    name='face_pipeline',
+    version='1.0.0',
+    author='Your Name',
+    author_email='your.email@example.com',
+    description='A comprehensive face recognition and analysis pipeline with sharing capabilities.',
+    long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
+    url='https://github.com/yourusername/face_pipeline',
     packages=find_packages(),
     include_package_data=True,
-    package_data={
-        'myfacerec': ['models/*.pt'],
-    },
     install_requires=[
-        "requests",
-        "numpy",
-        "torch",
-        "Pillow",
-        "scikit-learn",
-        "ultralytics",
-        "facenet-pytorch",
-        "opencv-python",  # For pose estimation
+        'numpy',
+        'opencv-python',
+        'torch',
+        'torchvision',
+        'facenet-pytorch',
+        'ultralytics',
+        'deep_sort_realtime',
+        'mediapipe',
+        'Pillow',
+        'streamlit',
+        'streamlit-webrtc',
+        'requests',
     ],
-    extras_require={
-        "dev": [
-            "pytest",
-            "pytest-mock",
-        ],
-    },
-    python_requires=">=3.9",
-    entry_points={
-        "console_scripts": [
-            "rolo-rec=myfacerec.cli:main",
-        ],
-        "myfacerec.detectors": [
-            # "yolo_face=myfacerec.detectors:YOLOFaceDetector",
-        ],
-        "myfacerec.embedders": [
-            # "facenet=myfacerec.embedders:FacenetEmbedder",
-        ],
-        "myfacerec.data_stores": [
-            # "json_store=myfacerec.data_store:JSONUserDataStore",
-        ],
-    },
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-        "Intended Audience :: Developers",
-        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        'Programming Language :: Python :: 3.8',
+        'Operating System :: OS Independent',
     ],
-    license="MIT",
-    keywords="facial recognition yolo facenet",
-    project_urls={
-        "Bug Tracker": "https://github.com/wuhplaptop/facerec/issues",
-        "Documentation": "https://github.com/wuhplaptop/facerec#readme",
-        "Source Code": "https://github.com/wuhplaptop/facerec",
+    python_requires='>=3.6',
+    entry_points={
+        'console_scripts': [
+            'face-pipeline=face_pipeline.core:main',
+        ],
     },
 )
