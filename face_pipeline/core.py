@@ -37,13 +37,7 @@ from .utilities import (
 
 logger = logging.getLogger(__name__)
 
-# Constants
-LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144]
-RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]
-
-mp_drawing = mp.solutions.drawing_utils
-mp_face_mesh = mp.solutions.face_mesh
-mp_hands = mp.solutions.hands
+# ... [Other constants and initializations]
 
 @dataclass
 class FacePipeline:
@@ -209,38 +203,39 @@ class FacePipeline:
 
             return annotated_frame, results
 
-        def is_real_face(self, face_roi: np.ndarray) -> bool:
-            try:
-                gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
-                lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
-                result = lap_var > self.config.anti_spoof['lap_thresh']
-                logger.debug(f"Anti-spoofing result: {result} (Laplacian Variance: {lap_var})")
-                return result
-            except Exception as e:
-                logger.error(f"Anti-spoof check failed: {str(e)}")
-                return False
+        # Moved outside of process_frame
+    def is_real_face(self, face_roi: np.ndarray) -> bool:
+        try:
+            gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
+            lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+            result = lap_var > self.config.anti_spoof['lap_thresh']
+            logger.debug(f"Anti-spoofing result: {result} (Laplacian Variance: {lap_var})")
+            return result
+        except Exception as e:
+            logger.error(f"Anti-spoof check failed: {str(e)}")
+            return False
 
-        def recognize_face(self, embedding: np.ndarray, recognition_threshold: float) -> Tuple[str, float]:
-            try:
+    def recognize_face(self, embedding: np.ndarray, recognition_threshold: float) -> Tuple[str, float]:
+        try:
+            best_match = "Unknown"
+            best_similarity = 0.0
+            for label, embeddings in self.db.embeddings.items():
+                for db_emb in embeddings:
+                    similarity = self.cosine_similarity(embedding, db_emb)
+                    if similarity > best_similarity:
+                        best_similarity = similarity
+                        best_match = label
+            if best_similarity < recognition_threshold:
                 best_match = "Unknown"
-                best_similarity = 0.0
-                for label, embeddings in self.db.embeddings.items():
-                    for db_emb in embeddings:
-                        similarity = self.cosine_similarity(embedding, db_emb)
-                        if similarity > best_similarity:
-                            best_similarity = similarity
-                            best_match = label
-                if best_similarity < recognition_threshold:
-                    best_match = "Unknown"
-                logger.debug(f"Recognized as {best_match} with similarity {best_similarity:.2f}")
-                return best_match, best_similarity
-            except Exception as e:
-                logger.error(f"Face recognition failed: {str(e)}")
-                return "Unknown", 0.0
+            logger.debug(f"Recognized as {best_match} with similarity {best_similarity:.2f}")
+            return best_match, best_similarity
+        except Exception as e:
+            logger.error(f"Face recognition failed: {str(e)}")
+            return "Unknown", 0.0
 
-        @staticmethod
-        def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-            return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-6))
+    @staticmethod
+    def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-6))
 
     def main():
         import argparse
