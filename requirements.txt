@@ -1,0 +1,12 @@
+numpy
+opencv-python
+torch
+torchvision
+facenet-pytorch
+ultralytics
+deep_sort_realtime
+mediapipe
+Pillow
+streamlit
+streamlit-webrtc
+requests
