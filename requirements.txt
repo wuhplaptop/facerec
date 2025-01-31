@@ -1,12 +1,11 @@
+requests
 numpy
 opencv-python
 torch
-torchvision
-facenet-pytorch
+Pillow
+gradio
 ultralytics
+facenet-pytorch
+torchvision
 deep_sort_realtime
 mediapipe
-Pillow
-streamlit
-streamlit-webrtc
-requests
