@@ -814,12 +814,11 @@ def enroll_user(label_name: str, files: List[bytes]) -> str:
         return "No images provided."
 
     enrolled_count = 0
-    for file_obj in files:
-        if not file_obj:
+    for file_bytes in files:
+        if not file_bytes:
             continue
         try:
-            img_bytes = file_obj.read()
-            img_array = np.frombuffer(img_bytes, np.uint8)
+            img_array = np.frombuffer(file_bytes, np.uint8)
             img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
             if img_bgr is None:
                 continue
@@ -925,18 +924,15 @@ def export_all_file() -> Tuple[bytes, str]:
     # Return a tuple of (file content, filename)
     return (file_content, "pipeline_export.pkl")
 
-def import_all_file(file_obj: gr.File, merge_db: bool = True) -> str:
+def import_all_file(file_bytes: bytes, merge_db: bool = True) -> str:
     """
     Imports a single pickle file containing both the config and database.
     If merge_db=False, overwrites the existing DB; otherwise merges.
     """
-    if file_obj is None:
+    if file_bytes is None:
         return "No file provided."
 
     try:
-        # Read the file content
-        file_bytes = file_obj.read()
-
         # Load the data from the bytes
         buf = io.BytesIO(file_bytes)
         combined_data = pickle.load(buf)
@@ -986,14 +982,11 @@ def export_config_file() -> Tuple[bytes, str]:
     config_bytes = pl.config.export_config()
     return (config_bytes, "config_export.pkl")
 
-def import_config_file(file_obj: gr.File) -> str:
+def import_config_file(file_bytes: bytes) -> str:
     """Import a pipeline config from uploaded bytes and re-initialize pipeline."""
-    if not file_obj:
+    if not file_bytes:
         return "No file provided."
     try:
-        # Read the file content
-        file_bytes = file_obj.read()
-
         new_cfg = PipelineConfig.import_config(file_bytes)
         pl = FacePipeline(new_cfg)
         pl.initialize()
@@ -1010,14 +1003,11 @@ def export_db_file() -> Tuple[bytes, str]:
     db_bytes = pl.db.export_database()
     return (db_bytes, "database_export.pkl")
 
-def import_db_file(file_obj: gr.File, merge: bool=True) -> str:
+def import_db_file(db_bytes: bytes, merge: bool=True) -> str:
     """Import face database from uploaded bytes. Merge or overwrite existing."""
-    if not file_obj:
+    if not db_bytes:
         return "No file provided."
     try:
-        # Read the file content
-        db_bytes = file_obj.read()
-
         pl = load_pipeline()
         pl.db.import_database(db_bytes, merge=merge)
         return f"Database imported successfully, merge={merge}"
@@ -1105,7 +1095,7 @@ def build_app():
 
             with gr.Accordion("User Enrollment", open=False):
                 enroll_name = gr.Textbox(label="User Name")
-                enroll_paths = gr.File(file_count="multiple", type="file", label="Upload Multiple Images")
+                enroll_paths = gr.File(file_count="multiple", type="binary", label="Upload Multiple Images")  # Corrected
                 enroll_btn = gr.Button("Enroll User")
                 enroll_result = gr.Textbox()
 
@@ -1170,20 +1160,20 @@ def build_app():
 
             gr.Markdown("**Export Individually (Download)**")
             export_config_btn = gr.Button("Export Config")
-            export_config_download = gr.File(label="Download Config Export", type="file")
+            export_config_download = gr.File(label="Download Config Export", type="binary")
 
             export_db_btn = gr.Button("Export Database")
-            export_db_download = gr.File(label="Download Database Export", type="file")
+            export_db_download = gr.File(label="Download Database Export", type="binary")
 
             export_config_btn.click(fn=export_config_file, inputs=[], outputs=[export_config_download])
             export_db_btn.click(fn=export_db_file, inputs=[], outputs=[export_db_download])
 
             gr.Markdown("**Import Individually (Upload)**")
-            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="file")
+            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="binary")
             import_config_btn = gr.Button("Import Config")
             import_config_out = gr.Textbox()
 
-            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="file")
+            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="binary")
             merge_db_checkbox = gr.Checkbox(label="Merge instead of overwrite?", value=True)
             import_db_btn = gr.Button("Import Database")
             import_db_out = gr.Textbox()
@@ -1199,7 +1189,7 @@ def build_app():
 
             # For exporting: we'll just produce a file in-memory
             export_all_btn = gr.Button("Export All (Config + DB)")
-            export_all_download = gr.File(label="Download Combined Export", type="file")
+            export_all_download = gr.File(label="Download Combined Export", type="binary")
 
             export_all_btn.click(
                 fn=export_all_file,
@@ -1208,7 +1198,7 @@ def build_app():
             )
 
             # For importing: user uploads file
-            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="file")
+            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="binary")
             import_all_merge_cb = gr.Checkbox(label="Merge DB instead of overwrite?", value=True)
             import_all_btn = gr.Button("Import All")
             import_all_out = gr.Textbox()
