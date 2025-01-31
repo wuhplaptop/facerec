@@ -12,6 +12,7 @@ from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, field
 from collections import Counter
 import io
+import tempfile # Import tempfile
 
 import gradio as gr
 
@@ -24,7 +25,7 @@ import mediapipe as mp
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG, # Changed to DEBUG for more detailed logs
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[logging.FileHandler('face_pipeline.log'), logging.StreamHandler()],
 )
@@ -117,6 +118,7 @@ class PipelineConfig:
             with open(path, 'wb') as f:
                 pickle.dump(self.__dict__, f)
             logger.info(f"Saved config to {path}")
+            logger.debug(f"Config data saved: {self.__dict__}") # Added debug log
         except Exception as e:
             logger.error(f"Config save failed: {str(e)}")
             raise RuntimeError(f"Config save failed: {str(e)}") from e
@@ -128,7 +130,10 @@ class PipelineConfig:
             if os.path.exists(path):
                 with open(path, 'rb') as f:
                     data = pickle.load(f)
+                logger.info(f"Loaded config from {path}")
+                logger.debug(f"Config data loaded: {data}") # Added debug log
                 return cls(**data)
+            logger.info("No config file found, using default config.") # Added log for default case
             return cls()
         except Exception as e:
             logger.error(f"Config load failed: {str(e)}")
@@ -808,6 +813,15 @@ def update_config(
     cfg.eye_color_text_color = hex_to_bgr(eye_color_text_hex)[::-1]
 
     cfg.save(CONFIG_PATH)
+    logger.info("Configuration updated with:") # Added info log
+    logger.info(f"Recognition Enabled: {enable_recognition}")
+    logger.info(f"Anti-spoof Enabled: {enable_antispoof}")
+    logger.info(f"Blink Enabled: {enable_blink}")
+    logger.info(f"Face Mesh Enabled: {enable_facemesh}, Tesselation: {show_tesselation}, Contours: {show_contours}, Irises: {show_irises}")
+    logger.info(f"Thresholds - Detection Conf: {detection_conf}, Recognition: {recognition_thresh}, Anti-spoof: {antispoof_thresh}, Blink: {blink_thresh}, Hand Det Conf: {hand_det_conf}, Hand Track Conf: {hand_track_conf}")
+    logger.info(f"Colors - BBox: {bbox_hex}, Spoofed: {spoofed_hex}, Unknown: {unknown_hex}, Eye Outline: {eye_hex}, Blink Text: {blink_hex}, Hand Landmark: {hand_landmark_hex}, Hand Connect: {hand_connect_hex}, Hand Text: {hand_text_hex}, Mesh: {mesh_hex}, Contour: {contour_hex}, Iris: {iris_hex}, Eye Color Text: {eye_color_text_hex}")
+
+
     return "Configuration saved successfully!"
 
 def enroll_user(label_name: str, files: List[bytes]) -> str:
@@ -907,10 +921,10 @@ def process_test_image(img: np.ndarray) -> Tuple[np.ndarray, str]:
 # ===================================
 # Combined Export/Import (Config + DB)
 # ===================================
-def export_all_file() -> bytes:
+def export_all_file() -> str: # Changed return type to str (file path)
     """
     Exports both the pipeline config and database embeddings into a single
-    pickle file. Returns the file content as bytes for Gradio to handle the download.
+    pickle file. Returns the file path for Gradio to handle the download.
     """
     pl = load_pipeline()
     combined_data = {
@@ -921,13 +935,12 @@ def export_all_file() -> bytes:
     # Create an in-memory buffer and pickle the combined data
     buf = io.BytesIO()
     pickle.dump(combined_data, buf)
-    buf.seek(0)
+    buf_bytes = buf.getvalue() # Get bytes from buffer
 
-    # Read the buffer's content
-    file_content = buf.read()
-
-    # Return only the file content as bytes
-    return file_content
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
+        tmp_file.write(buf_bytes)
+        temp_path = tmp_file.name
+    return temp_path # Return the path to the temporary file
 
 def import_all_file(file_bytes: bytes, merge_db: bool = True) -> str:
     """
@@ -981,11 +994,14 @@ def import_all_file(file_bytes: bytes, merge_db: bool = True) -> str:
 # Config or DB individually
 # ==========================
 
-def export_config_file() -> bytes:
+def export_config_file() -> str: # Changed return type to str (file path)
     """Export the current pipeline config as a downloadable file."""
     pl = load_pipeline()
     config_bytes = pl.config.export_config()
-    return config_bytes
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
+        tmp_file.write(config_bytes)
+        temp_path = tmp_file.name
+    return temp_path # Return the path to the temporary file
 
 def import_config_file(file_bytes: bytes) -> str:
     """Import a pipeline config from uploaded bytes and re-initialize pipeline."""
@@ -1002,11 +1018,14 @@ def import_config_file(file_bytes: bytes) -> str:
         logger.error(f"Import config failed: {str(e)}")
         return f"Import failed: {str(e)}"
 
-def export_db_file() -> bytes:
+def export_db_file() -> str: # Changed return type to str (file path)
     """Export the current face database as a downloadable file."""
     pl = load_pipeline()
     db_bytes = pl.db.export_database()
-    return db_bytes
+    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as tmp_file:
+        tmp_file.write(db_bytes)
+        temp_path = tmp_file.name
+    return temp_path # Return the path to the temporary file
 
 def import_db_file(db_bytes: bytes, merge: bool=True) -> str:
     """Import face database from uploaded bytes. Merge or overwrite existing."""
@@ -1200,7 +1219,7 @@ def build_app():
             export_all_download = gr.File(label="Download Combined Export", type="binary")
 
             export_all_btn.click(
-                fn=export_all_file,  # Now returns only bytes
+                fn=export_all_file,  # Now returns file path
                 outputs=[export_all_download],
                 inputs=[]
             )
