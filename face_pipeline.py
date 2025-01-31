@@ -1088,7 +1088,7 @@ def build_app():
 
             with gr.Accordion("User Enrollment", open=False):
                 enroll_name = gr.Textbox(label="User Name")
-                enroll_paths = gr.File(file_count="multiple", type="file", label="Upload Multiple Images")
+                enroll_paths = gr.File(file_count="multiple", type="filepath", label="Upload Multiple Images")  # Updated here
                 enroll_btn = gr.Button("Enroll User")
                 enroll_result = gr.Textbox()
 
@@ -1164,11 +1164,11 @@ def build_app():
             export_db_btn.click(export_db_file, inputs=[export_db_path], outputs=[export_db_out])
 
             gr.Markdown("**Import Individually (Server Paths)**")
-            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="file")
+            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="filepath")  # Updated here
             import_config_btn = gr.Button("Import Config")
             import_config_out = gr.Textbox()
 
-            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="file")
+            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="filepath")  # Updated here
             merge_db_checkbox = gr.Checkbox(label="Merge instead of overwrite?", value=True)
             import_db_btn = gr.Button("Import Database")
             import_db_out = gr.Textbox()
@@ -1193,7 +1193,7 @@ def build_app():
             )
 
             # For importing: user uploads file
-            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="file")
+            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="filepath")  # Updated here
             import_all_merge_cb = gr.Checkbox(label="Merge DB instead of overwrite?", value=True)
             import_all_btn = gr.Button("Import All")
             import_all_out = gr.Textbox()
