@@ -1160,13 +1160,13 @@ def build_app():
 
             gr.Markdown("**Export Individually (Download)**")
             export_config_btn = gr.Button("Export Config")
-            export_config_out = gr.File(label="Download Config Export")
+            export_config_download = gr.Download(label="Download Config Export")  # Changed to gr.Download
 
             export_db_btn = gr.Button("Export Database")
-            export_db_out = gr.File(label="Download Database Export")
+            export_db_download = gr.Download(label="Download Database Export")  # Changed to gr.Download
 
-            export_config_btn.click(export_config_file, inputs=[], outputs=[export_config_out])
-            export_db_btn.click(export_db_file, inputs=[], outputs=[export_db_out])
+            export_config_btn.click(export_config_file, inputs=[], outputs=[export_config_download])
+            export_db_btn.click(export_db_file, inputs=[], outputs=[export_db_download])
 
             gr.Markdown("**Import Individually (Upload)**")
             import_config_filebox = gr.File(label="Import Config File", file_count="single", type="binary")  # Updated
@@ -1189,11 +1189,11 @@ def build_app():
 
             # For exporting: we'll just produce a file in-memory
             export_all_btn = gr.Button("Export All (Config + DB)")
-            export_all_file_out = gr.File(label="Download Combined Export")
+            export_all_download = gr.Download(label="Download Combined Export")  # Changed to gr.Download
 
             export_all_btn.click(
                 fn=export_all_file,
-                outputs=[export_all_file_out],
+                outputs=[export_all_download],
                 inputs=[]
             )
 
