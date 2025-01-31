@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="face-pipeline",  # PyPI package name
-    version="0.0.11",       # Increment to release new versions
+    version="0.0.12",       # Increment to release new versions
     py_modules=["face_pipeline"],  # Because your code is in face_pipeline.py
     install_requires=[
         "requests",
