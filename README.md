@@ -1,294 +1,265 @@
-# Face Pipeline
+# FaceRec: Comprehensive Face Recognition Pipeline
 
-A **single-file face recognition pipeline** built on YOLO, Mediapipe, DeepSORT, and FaceNet. It also integrates blink detection, anti-spoof, hand-tracking, eye-color detection, and a Gradio UI. This project allows you to detect faces, recognize known individuals, track them between frames, detect spoofing attempts, and more—all in a single minimal codebase.
+![Face Recognition](https://github.com/wuhplaptop/facerec/blob/main/images/face_recognition_banner.png?raw=true)
 
 ## Table of Contents
-
-1. [Overview](#overview)
-2. [Features](#features)
-3. [Installation](#installation)
-4. [Quick Start](#quick-start)
-5. [Gradio Application Usage](#gradio-application-usage)
-   - [Tabs Overview](#tabs-overview)
-   - [Export / Import Config or Database](#export--import-config-or-database)
-6. [API & Code Structure](#api--code-structure)
-   - [1. `PipelineConfig`](#1-pipelineconfig)
-   - [2. `FaceDatabase`](#2-facedatabase)
-   - [3. `YOLOFaceDetector`](#3-yolofacedetector)
-   - [4. `FaceTracker` (DeepSORT)](#4-facetracker-deepsort)
-   - [5. `FaceNetEmbedder`](#5-facenetembedder)
-   - [6. Blink Detection](#6-blink-detection)
-   - [7. Face Mesh & Eye Color Detection](#7-face-mesh--eye-color-detection)
-   - [8. `HandTracker`](#8-handtracker)
-   - [9. `FacePipeline`](#9-facepipeline)
-   - [10. Export/Import Helpers](#10-exportimport-helpers)
-   - [11. Gradio `build_app` Function](#11-gradio-build_app-function)
-7. [Testing](#testing)
-8. [Credits](#credits)
-9. [License](#license)
-
----
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Launching the Gradio App](#launching-the-gradio-app)
+  - [Image Test](#image-test)
+  - [Configuration](#configuration)
+  - [Database Management](#database-management)
+  - [Export / Import](#export--import)
+- [How It Works](#how-it-works)
+  - [Detection](#detection)
+  - [Tracking](#tracking)
+  - [Recognition](#recognition)
+  - [Anti-Spoofing](#anti-spoofing)
+  - [Blink Detection](#blink-detection)
+  - [Eye Color Detection](#eye-color-detection)
+  - [Face Mesh](#face-mesh)
+  - [Hand Tracking](#hand-tracking)
+  - [Export/Import Mechanism](#exportimport-mechanism)
+- [Packages and Credits](#packages-and-credits)
+- [License](#license)
 
 ## Overview
 
-This repository implements a **face recognition and tracking pipeline** in a single file (`face_pipeline.py`). It uses:
-
-- **YOLO** (via Ultralytics) for face detection.
-- **DeepSORT** for real-time multi-object tracking of faces.
-- **FaceNet** (via `facenet-pytorch`) for face recognition embeddings.
-- **Mediapipe** for:
-  - **Blink detection** (Face Mesh)
-  - **Eye color detection** (also uses Mediapipe Face Mesh)
-  - **Hand tracking**
-- **Anti-spoof** check based on image sharpness (Laplacian variance).
-- **Gradio** for an easy-to-use **web interface**.
-
----
+Welcome to **FaceRec**, a comprehensive face recognition pipeline that integrates state-of-the-art technologies for face detection, tracking, recognition, and analysis. Leveraging powerful libraries like **YOLO**, **FaceNet**, **Deep SORT**, and **Mediapipe**, FaceRec provides a robust and flexible solution for real-time face analysis. The user-friendly **Gradio** interface ensures ease of use, allowing users to interact with the system seamlessly.
 
 ## Features
 
-1. **Face Detection**  
-   Uses a YOLO model (`face2.pt`) to detect faces in images or video frames.
-
-2. **Face Tracking**  
-   Uses **DeepSORT** to assign consistent IDs to faces across frames, so you can track them over time.
-
-3. **Face Recognition**  
-   Uses FaceNet embeddings to identify known individuals from a local “face database.”
-
-4. **Anti-Spoof**  
-   Checks if a detected face is “real” or a “spoof” using a blur/sharpness threshold (Laplacian variance).
-
-5. **Blink Detection**  
-   Uses Mediapipe’s Face Mesh landmarks to detect blinks based on Eye Aspect Ratio (EAR).
-
-6. **Face Mesh (Contours / Irises / Tesselation)**  
-   Uses Mediapipe Face Mesh to optionally draw face landmarks, iris landmarks, and more.
-
-7. **Eye Color Detection**  
-   Estimates the dominant color of the iris region using a basic KMeans color analysis, then maps it to a known color label.
-
-8. **Hand Tracking**  
-   Uses Mediapipe Hands to detect and annotate hands if enabled.
-
-9. **Configurable**  
-   All thresholds, toggles, bounding box colors, etc. are adjustable via the **Gradio** UI’s **Configuration** tab.
-
-10. **Import / Export**  
-    - Export/Import the entire face database as `.pkl` to share known faces with others.  
-    - Export/Import the pipeline config (`.pkl`) to share the entire configuration.
-
----
+- **Face Detection**: Utilizes YOLO for precise and efficient face detection.
+- **Face Tracking**: Implements Deep SORT for reliable tracking of detected faces across frames.
+- **Face Recognition**: Employs FaceNet for generating and comparing face embeddings to recognize individuals.
+- **Anti-Spoofing**: Detects potential spoofed faces to ensure authenticity.
+- **Blink Detection**: Monitors eye aspect ratios to identify blinks.
+- **Eye Color Detection**: Analyzes iris regions to determine eye color.
+- **Face Mesh**: Integrates Mediapipe's face mesh for detailed facial landmark analysis.
+- **Hand Tracking**: Uses Mediapipe Hands for real-time hand detection and tracking.
+- **Gradio Interface**: Provides an intuitive web-based UI for testing, configuration, database management, and export/import operations.
+- **Combined Export/Import**: Allows users to export and import both configuration settings and the face database in a single file.
 
 ## Installation
 
-### 1. Clone or Download
+FaceRec can be easily installed via `pip`. Ensure you have **Python 3.7** or higher installed on your system.
 
-```bash
-git clone https://github.com/YourUsername/yourrepo.git
-cd yourrepo
-```
+### Prerequisites
 
-*(If you just have the files, place them all in one folder.)*
+- **Python 3.7 or higher**
+- **pip** (Python package installer)
+- **Git** (optional, for cloning the repository)
 
-### 2. Install Package
+### Steps
 
-Install in **editable mode** (local development):
-
-```bash
-pip install -e .
-```
-
-*(This looks for `setup.py` in the current directory, installs `face_pipeline`.)*
-
-Or install from PyPI (assuming you’ve published it there):
-
-```bash
-pip install face-pipeline
-```
-
-### 3. Dependencies
-
-All required dependencies (Torch, Mediapipe, ultralytics, etc.) are listed in `setup.py`. They will automatically install with `pip`. If you prefer, you can also install them from `requirements.txt`:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Quick Start
-
-1. **Launch the Gradio Interface**:
-
+1. **Clone the Repository (Optional)**
+   
+   If you prefer to clone the repository, use the following commands:
+   
    ```bash
-   face-pipeline
+   git clone https://github.com/wuhplaptop/facerec.git
+   cd facerec
    ```
 
-   or
-
+2. **Install via pip**
+   
+   Install FaceRec directly using `pip`:
+   
    ```bash
-   python -m face_pipeline
+   pip install face-pipeline
    ```
 
-   - This starts a local web server on `http://0.0.0.0:7860`.
+3. **Download YOLO Model (Automatic)**
+   
+   The system automatically downloads the YOLO face detection model if it's not present in the specified directory during the first run.
 
-2. **Open your browser** at `http://localhost:7860`.
-3. **Use the Tabs** to test images, configure thresholds, manage your database of known faces, etc.
+## Usage
 
----
+FaceRec provides a powerful Gradio-based web interface for interacting with the system. Below are detailed instructions on how to use each feature.
 
-## Gradio Application Usage
+### Launching the Gradio App
 
-When you run `face-pipeline`, you’ll see a **Gradio UI** with several tabs:
-
-### Tabs Overview
-
-1. **Image Test**  
-   Upload an image (single frame). The pipeline will detect faces, track them, recognize known identities, and highlight any spoofs or blinks. You’ll see an annotated output and JSON detection info.
-
-2. **Configuration**  
-   Turn features on/off (recognition, anti-spoof, blink, hand tracking, face mesh, etc.), adjust thresholds, and configure bounding-box colors. Then **Save** the config to persist changes to `~/.face_pipeline/config.pkl`.
-
-3. **Database Management**  
-   - **User Enrollment**: Provide a label and multiple face images to enroll a new user’s embeddings.  
-   - **User Search**: Search by name or by uploading an image.  
-   - **User Management Tools**: List all known user labels, remove specific users, refresh the list, etc.
-
-4. **Export / Import**  
-   - **Export** or **Import** the pipeline config (`.pkl`) for thresholds/colors.  
-   - **Export** or **Import** the face embeddings database (`.pkl`) to share recognized faces.  
-   - **Merge** or **overwrite** the local database on import.
-
-### Export / Import Config or Database
-
-- **Export Config**:  
-  Specify a path (e.g., `my_config.pkl`), click **Export Config**. This dumps the pipeline thresholds and color settings.
-
-- **Import Config**:  
-  Upload or type the path to a `.pkl` config file, click **Import Config** to load it and re-initialize.
-
-- **Export Database**:  
-  Similar to config, but for the face embeddings. Creates, e.g., `my_database.pkl`.
-
-- **Import Database**:  
-  Select a `.pkl` file of face embeddings from someone else. Choose whether to **merge** with your existing DB or **overwrite** it entirely.
-
----
-
-## API & Code Structure
-
-Everything is in **`face_pipeline.py`**, which is a **single** large file containing:
-
-### 1. `PipelineConfig`
-A dataclass that holds all pipeline configuration:
-
-- **`detector`**: model path, device (CPU vs GPU).  
-- **`recognition`**: whether to enable face recognition, etc.  
-- **`blink`**: blink detection thresholds.  
-- **`anti_spoof`**: Laplacian variance threshold.  
-- **Colors** for bounding boxes, face mesh lines, blink text, etc.
-
-**Key Methods**:
-- `save(path)` / `load(path)`: pickles/unpickles config to/from disk.  
-- `export_config(...)` / `import_config(...)`: convenience for exporting/importing to `.pkl`.
-
-### 2. `FaceDatabase`
-Manages all known face embeddings:
-
-- **`embeddings`**: a dict mapping `label -> List[np.ndarray of embeddings]`.
-- **`add_embedding(label, embedding)`**: add an embedding for a user.
-- **`remove_label(label)`**: delete a user entirely.
-- **`list_labels()`**: list all known user labels.
-- **`search_by_image(embedding, threshold)`**: returns matches with similarity >= threshold.
-
-**Key Methods**:
-- `save()`: pickles the entire embeddings dict to `~/.face_pipeline/known_faces.pkl`.
-- `export_database(...)` / `import_database(...)`: for sharing or merging DB files.
-
-### 3. `YOLOFaceDetector`
-Wraps the **Ultralytics YOLO** model for face detection:
-
-- Automatically downloads the custom `face2.pt` from GitHub if not present.
-- **`detect(image, conf_thres)`**: returns bounding boxes, confidences, and classes.
-
-### 4. `FaceTracker` (DeepSORT)
-Implements multi-face tracking using **DeepSORT**:
-
-- **`update(detections, frame)`**: returns a list of track objects with stable IDs, bounding boxes, etc.
-
-### 5. `FaceNetEmbedder`
-Uses **FaceNet** (via `facenet-pytorch`) to embed face crops into a 512-D vector:
-
-- **`get_embedding(face_bgr)`**: returns a NumPy embedding or `None` on error.
-
-### 6. Blink Detection
-Via **Mediapipe Face Mesh** and Eye Aspect Ratio (EAR):
-
-- **`detect_blink(face_roi, threshold=0.25)`**:
-  - Returns a bool (blink or not), left & right EAR values, plus eye landmarks.
-
-### 7. Face Mesh & Eye Color Detection
-- **`process_face_mesh(face_roi)`** obtains Mediapipe landmarks for face mesh.
-- **`draw_face_mesh(...)`** draws tesselation, contours, iris lines on the face image.
-- **`detect_eye_color(face_roi, landmarks)`** does KMeans on the iris region to classify color as *blue*, *brown*, *green*, *hazel*, etc.
-
-### 8. `HandTracker`
-Uses **Mediapipe Hands** to detect, track, and draw landmarks for up to 2 hands:
-
-- **`detect_hands(image)`** returns Mediapipe’s hand landmarks + handedness classification.
-- **`draw_hands(image, landmarks, handedness, config)`** draws lines, circles, and text labels for each detected hand.
-
-### 9. `FacePipeline`
-The main pipeline class:
-
-- **Holds** the config, the YOLO detector, the DeepSORT tracker, the FaceNet embedder, the FaceDatabase, and optionally the HandTracker.
-- **`initialize()`** sets up everything, loading config from disk, models, etc.
-- **`process_frame(frame)`** does the full detection + tracking + anti-spoof + recognition + blink + face mesh + hand detection in one pass. Returns an annotated frame and a list of detection results.
-
-**Additional methods**:
-- `is_real_face(face_roi)`: Laplacian-based anti-spoof check.  
-- `recognize_face(embedding, threshold)`: returns best matching label or “Unknown.”
-
-### 10. Export/Import Helpers
-- **`export_config_file(export_path)`** / **`import_config_file(import_path)`**  
-- **`export_db_file(export_path)`** / **`import_db_file(import_path, merge=True)`**  
-
-Used by the Gradio UI to let users easily share config or known faces.
-
-### 11. Gradio `build_app` Function
-Defines the user interface:
-
-- **Tabs**: “Image Test,” “Configuration,” “Database Management,” “Export / Import.”
-- Each tab has UI elements (checkboxes, sliders, file upload, etc.) that call specific functions like `process_test_image` or `enroll_user`.
-
----
-
-## Testing
-
-A sample test file, `test_face_pipeline.py`, uses **pytest** to ensure:
-
-1. You can import `face_pipeline` without errors.
-2. `pipeline = face_pipeline.load_pipeline()` initializes successfully.
-
-**Run tests**:
+After installation, launch the Gradio app using the following command:
 
 ```bash
-pytest
+python -m face_pipeline
 ```
 
-**Libraries & Frameworks**:  
-1. [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) – Face detection model backbone.  
-2. [Deep SORT Realtime](https://github.com/GeekAlexander/deep_sort_realtime) – Realtime multi-object tracking.  
-3. [facenet-pytorch](https://github.com/timesler/facenet-pytorch) – Pretrained FaceNet for embeddings.  
-4. [Mediapipe](https://github.com/google/mediapipe) – Face Mesh, Hand Tracking, etc.  
-5. [Gradio](https://github.com/gradio-app/gradio) – Web UI framework.  
-6. [PyTorch](https://pytorch.org/) – Core deep-learning framework.  
-7. [OpenCV](https://github.com/opencv/opencv) – Image processing.  
-8. [Requests](https://docs.python-requests.org/) – For HTTP requests (downloading models).
+*Replace `face_pipeline` with the actual module name if different.*
 
-**Other**:
-- Face detection model `face2.pt` courtesy of [wuhplaptop/face-11-n](https://github.com/wuhplaptop/face-11-n).  
-- This repository’s structure and CI/CD approach was inspired by standard Python packaging guidelines and GitHub Actions templates.
+Once launched, open your browser and navigate to `http://0.0.0.0:7860` to access the application.
+
+### Image Test
+
+**Purpose**: Upload a single image to perform face detection, recognition, blink detection, face mesh analysis, and hand tracking.
+
+**Steps**:
+1. Navigate to the **Image Test** tab.
+2. Click on **Upload Image** to select an image from your device.
+3. Click **Process Image** to run the analysis.
+4. View the annotated image and detection results.
+
+![Image Test](https://github.com/wuhplaptop/facerec/blob/main/images/image_test.png?raw=true)
+
+### Configuration
+
+**Purpose**: Customize detection parameters, toggle features, and adjust color settings to tailor the pipeline to your needs.
+
+**Features**:
+- **Toggle Components**: Enable or disable recognition, anti-spoofing, blink detection, hand tracking, eye color detection, and face mesh.
+- **Face Mesh Options**: Toggle tesselation, contours, and irises display.
+- **Threshold Settings**: Adjust detection confidence, recognition threshold, anti-spoof threshold, blink EAR threshold, hand detection confidence, and hand tracking confidence.
+- **Color Customization**: Set colors for bounding boxes, eye outlines, blink text, hand landmarks, connections, mesh, contours, irises, and eye color text.
+
+**Steps**:
+1. Navigate to the **Configuration** tab.
+2. Adjust the desired settings using checkboxes, sliders, and text inputs for color hex codes.
+3. Click **Save Configuration** to apply and persist changes.
+
+![Configuration](https://github.com/wuhplaptop/facerec/blob/main/images/configuration.png?raw=true)
+
+### Database Management
+
+**Purpose**: Manage the face database by enrolling new users, searching, listing, and removing existing entries.
+
+#### User Enrollment
+
+- **Enroll a New User**: Provide a user name and upload multiple images to add to the database.
+
+#### User Search
+
+- **Search By Name**: Select a user from the dropdown to retrieve their embeddings.
+- **Search By Image**: Upload an image to find matching faces in the database.
+
+#### User Management Tools
+
+- **List Enrolled Users**: View all users currently enrolled in the database.
+- **Remove User**: Select a user from the dropdown and remove them from the database.
+
+**Steps**:
+1. Navigate to the **Database Management** tab.
+2. Expand the desired accordion section (**User Enrollment**, **User Search**, or **User Management Tools**) to perform actions.
+3. Follow on-screen instructions to enroll, search, list, or remove users.
+
+![Database Management](https://github.com/wuhplaptop/facerec/blob/main/images/database_management.png?raw=true)
+
+### Export / Import
+
+**Purpose**: Export and import both the configuration settings and face database either individually or combined into a single file.
+
+#### Export Individually (Server Paths)
+
+- **Export Config**: Specify a server path to save the current configuration.
+- **Export Database**: Specify a server path to save the face database.
+
+#### Import Individually (Server Paths)
+
+- **Import Config**: Upload a configuration file from your device to apply settings.
+- **Import Database**: Upload a database file from your device to merge or overwrite existing data.
+
+#### Export & Import All Together
+
+- **Export All**: Download a combined file containing both configuration and database.
+- **Import All**: Upload a combined file to apply both configuration and database settings simultaneously.
+
+**Steps**:
+1. Navigate to the **Export / Import** tab.
+2. Choose between exporting/importing individually or using the combined option.
+3. Follow the on-screen prompts to perform the desired action.
+4. For downloading exported files, a download link will be provided directly in the browser.
+
+![Export Import](https://github.com/wuhplaptop/facerec/blob/main/images/export_import.png?raw=true)
+
+## How It Works
+
+The FaceRec system integrates multiple components to deliver a seamless and robust face analysis experience. Below is an in-depth explanation of each component and its role in the system.
+
+### Detection
+
+**YOLO (You Only Look Once)** is employed for real-time face detection. It processes input images to identify bounding boxes around faces with associated confidence scores.
+
+- **Model Loading**: Automatically downloads the YOLO model if not present.
+- **Detection Process**: Scans the image and returns coordinates for detected faces.
+
+### Tracking
+
+**Deep SORT (Simple Online and Realtime Tracking)** is utilized to maintain consistent tracking of detected faces across multiple frames or images.
+
+- **Initialization**: Configured with parameters like `max_age` to determine how long to keep tracking a face.
+- **Tracking Process**: Updates tracks based on new detections, ensuring each face maintains a unique identifier.
+
+### Recognition
+
+**FaceNet** generates 512-dimensional embeddings for detected faces, enabling comparison and recognition against stored embeddings in the database.
+
+- **Embedding Generation**: Processes cropped face images to produce embeddings.
+- **Similarity Calculation**: Compares embeddings using cosine similarity to identify known individuals.
+
+### Anti-Spoofing
+
+Implements an anti-spoofing mechanism by analyzing the variance of the Laplacian (a measure of image sharpness) to detect potential spoofed faces.
+
+- **Process**: Converts face ROI to grayscale and computes Laplacian variance.
+- **Thresholding**: Determines if the face is real based on a predefined threshold.
+
+### Blink Detection
+
+Monitors eye aspect ratios to detect blinks, enhancing the system's ability to analyze facial expressions and fatigue.
+
+- **Landmark Detection**: Uses Mediapipe's Face Mesh to identify eye landmarks.
+- **Aspect Ratio Calculation**: Computes the ratio to determine if eyes are closed.
+
+### Eye Color Detection
+
+Analyzes the iris region to determine eye color by identifying the dominant color within the detected iris landmarks.
+
+- **Dominant Color Extraction**: Applies K-Means clustering to find the most prevalent color.
+- **Color Classification**: Matches the dominant color to predefined eye color ranges.
+
+### Face Mesh
+
+**Mediapipe's Face Mesh** provides detailed facial landmark detection, enabling precise analysis of facial features.
+
+- **Landmark Detection**: Identifies 468 facial landmarks for comprehensive mesh generation.
+- **Visualization**: Draws tesselation, contours, and irises based on configuration settings.
+
+### Hand Tracking
+
+Incorporates **Mediapipe Hands** to detect and track hands within the image, adding an extra layer of analysis for gestures and interactions.
+
+- **Detection**: Identifies hand landmarks and handedness.
+- **Visualization**: Draws hand landmarks and connections with customizable colors.
+
+### Export/Import Mechanism
+
+Facilitates the backup and restoration of both configuration settings and the face database.
+
+- **Combined Export**: Packages both config and database into a single pickle file for easy download.
+- **Combined Import**: Allows users to upload the combined file to restore settings and data seamlessly.
+- **Flexibility**: Users can choose to merge or overwrite the existing database during import.
+
+## Packages and Credits
+
+This project leverages several open-source packages to deliver its functionality:
+
+- **[Gradio](https://gradio.app/)**: For building the web-based user interface.
+- **[PyTorch](https://pytorch.org/)**: Backend for deep learning models.
+- **[FaceNet-PyTorch](https://github.com/timesler/facenet-pytorch)**: For face embedding generation.
+- **[Ultralytics YOLO](https://github.com/ultralytics/yolov5)**: For face detection.
+- **[Deep SORT Realtime](https://github.com/theAIGuysCode/deep_sort_realtime)**: For face tracking.
+- **[Mediapipe](https://google.github.io/mediapipe/)**: For face mesh and hand tracking.
+- **[OpenCV](https://opencv.org/)**: For image processing tasks.
+- **[NumPy](https://numpy.org/)**: For numerical operations.
+- **[Pillow](https://python-pillow.org/)**: For image handling.
+- **[Requests](https://requests.readthedocs.io/)**: For HTTP requests to download models.
+- **[Logging](https://docs.python.org/3/library/logging.html)**: For logging system activities.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ---
+
+*Feel free to contribute, report issues, or suggest features to improve this system!*
