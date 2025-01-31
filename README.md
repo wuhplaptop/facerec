@@ -1,7 +1,3 @@
-Below is an **example** of a comprehensive **README.md** you can include with your project. It covers installation, usage instructions, an overview of each component, and credits. Feel free to edit sections (like your own name, repository links, or any additional instructions) as you see fit.
-
----
-
 # Face Pipeline
 
 A **single-file face recognition pipeline** built on YOLO, Mediapipe, DeepSORT, and FaceNet. It also integrates blink detection, anti-spoof, hand-tracking, eye-color detection, and a Gradio UI. This project allows you to detect faces, recognize known individuals, track them between frames, detect spoofing attempts, and more—all in a single minimal codebase.
