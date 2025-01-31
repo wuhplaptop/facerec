@@ -332,7 +332,7 @@ class FaceNetEmbedder:
             logger.error(f"Embedding failed: {str(e)}")
             return None
 
-def detect_blink(face_roi: np.ndarray, threshold: float = 0.25) -> Tuple[bool, float, float, np.ndarray, np.ndarray]:
+def detect_blink(face_roi: np.ndarray, threshold: float = 0.25) -> Tuple[bool, float, float, Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Returns:
       (blink_bool, left_ear, right_ear, left_eye_points, right_eye_points).
@@ -805,7 +805,7 @@ def update_config(
     cfg.save(CONFIG_PATH)
     return "Configuration saved successfully!"
 
-def enroll_user(label_name: str, files: List[gr.components.File]) -> str:
+def enroll_user(label_name: str, files: List[bytes]) -> str:
     """Enrolls a user by name using multiple uploaded image files."""
     pl = load_pipeline()
     if not label_name:
@@ -814,12 +814,11 @@ def enroll_user(label_name: str, files: List[gr.components.File]) -> str:
         return "No images provided."
 
     enrolled_count = 0
-    for file in files:
-        if not file:
+    for file_bytes in files:
+        if not file_bytes:
             continue
         try:
-            img_bytes = file.read()
-            img_array = np.frombuffer(img_bytes, np.uint8)
+            img_array = np.frombuffer(file_bytes, np.uint8)
             img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
             if img_bgr is None:
                 continue
@@ -935,7 +934,7 @@ def import_all_file(file_obj, merge_db: bool = True) -> str:
 
     try:
         # Read bytes from the uploaded file
-        file_bytes = file_obj.read()
+        file_bytes = file_obj
         buf = io.BytesIO(file_bytes)
 
         # Load the data from the buffer
@@ -986,13 +985,12 @@ def export_config_file() -> Tuple[bytes, str]:
     config_bytes = pl.config.export_config()
     return (config_bytes, "config_export.pkl")
 
-def import_config_file(file_obj) -> str:
-    """Import a pipeline config from an uploaded file and re-initialize pipeline."""
-    if not file_obj:
+def import_config_file(file_bytes: bytes) -> str:
+    """Import a pipeline config from uploaded bytes and re-initialize pipeline."""
+    if not file_bytes:
         return "No file provided."
     try:
-        config_bytes = file_obj.read()
-        new_cfg = PipelineConfig.import_config(config_bytes)
+        new_cfg = PipelineConfig.import_config(file_bytes)
         pl = FacePipeline(new_cfg)
         pl.initialize()
         global pipeline
@@ -1008,12 +1006,11 @@ def export_db_file() -> Tuple[bytes, str]:
     db_bytes = pl.db.export_database()
     return (db_bytes, "database_export.pkl")
 
-def import_db_file(file_obj, merge: bool=True) -> str:
-    """Import face database from an uploaded file. Merge or overwrite existing."""
-    if not file_obj:
+def import_db_file(db_bytes: bytes, merge: bool=True) -> str:
+    """Import face database from uploaded bytes. Merge or overwrite existing."""
+    if not db_bytes:
         return "No file provided."
     try:
-        db_bytes = file_obj.read()
         pl = load_pipeline()
         pl.db.import_database(db_bytes, merge=merge)
         return f"Database imported successfully, merge={merge}"
@@ -1101,7 +1098,7 @@ def build_app():
 
             with gr.Accordion("User Enrollment", open=False):
                 enroll_name = gr.Textbox(label="User Name")
-                enroll_paths = gr.File(file_count="multiple", type="file", label="Upload Multiple Images")  # Fixed here
+                enroll_paths = gr.File(file_count="multiple", type="bytes", label="Upload Multiple Images")  # Updated
                 enroll_btn = gr.Button("Enroll User")
                 enroll_result = gr.Textbox()
 
@@ -1175,11 +1172,11 @@ def build_app():
             export_db_btn.click(export_db_file, inputs=[], outputs=[export_db_out])
 
             gr.Markdown("**Import Individually (Upload)**")
-            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="file")  # Fixed here
+            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="bytes")  # Updated
             import_config_btn = gr.Button("Import Config")
             import_config_out = gr.Textbox()
 
-            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="file")  # Fixed here
+            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="bytes")  # Updated
             merge_db_checkbox = gr.Checkbox(label="Merge instead of overwrite?", value=True)
             import_db_btn = gr.Button("Import Database")
             import_db_out = gr.Textbox()
@@ -1204,7 +1201,7 @@ def build_app():
             )
 
             # For importing: user uploads file
-            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="file")  # Fixed here
+            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="bytes")  # Updated
             import_all_merge_cb = gr.Checkbox(label="Merge DB instead of overwrite?", value=True)
             import_all_btn = gr.Button("Import All")
             import_all_out = gr.Textbox()
