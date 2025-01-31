@@ -180,7 +180,7 @@ class FaceDatabase:
 
     def import_database(self, import_path: str, merge: bool = True):
         """
-        Import embeddings from a .pkl file. 
+        Import embeddings from a .pkl file.
         If merge=True, merges with current DB. If False, overwrites.
         """
         if not os.path.isfile(import_path):
@@ -483,7 +483,6 @@ def detect_eye_color(face_roi: np.ndarray, face_landmarks) -> Optional[str]:
     y2 = min(h, max_y + pad)
 
     eye_roi = face_roi[y1:y2, x1:x2]
-
     eye_roi_resize = cv2.resize(eye_roi, (40, 40), interpolation=cv2.INTER_AREA)
 
     if eye_roi_resize.size == 0:
@@ -558,11 +557,8 @@ class FacePipeline:
                 model_path=self.config.detector['model_path'],
                 device=self.config.detector['device']
             )
-
             self.tracker = FaceTracker(max_age=self.config.tracker['max_age'])
-
             self.facenet = FaceNetEmbedder(device=self.config.detector['device'])
-
             self.db = FaceDatabase()
 
             if self.config.hand['enable']:
@@ -670,7 +666,7 @@ class FacePipeline:
                 face_mesh_landmarks = None
                 eye_color_name = None
                 if (self.config.face_mesh_options.get('enable') or
-                    self.config.eye_color.get('enable')):
+                        self.config.eye_color.get('enable')):
                     face_mesh_landmarks = process_face_mesh(face_roi)
                     if face_mesh_landmarks:
                         # Draw mesh
@@ -916,11 +912,89 @@ def process_test_image(img: np.ndarray) -> Tuple[np.ndarray, str]:
     return result_rgb, str(detections)
 
 
-# ================
-# Export/Import Helpers for Gradio
-# ================
+# ===================================
+# Combined Export/Import (Config + DB)
+# ===================================
+def export_all_file() -> gr.File:
+    """
+    Exports both the pipeline config and database embeddings into a single
+    pickle file. Returns a Gradio File object so the user can download it.
+    """
+    pl = load_pipeline()
+    combined_data = {
+        "config": pl.config.__dict__,   # or you could store a version of PipelineConfig by name
+        "database": pl.db.embeddings
+    }
+
+    # We'll create an in-memory buffer and return it as a downloadable file
+    import io
+    buf = io.BytesIO()
+    pickle.dump(combined_data, buf)
+    buf.seek(0)
+
+    # Gradio can return (file-like object, "filename.ext")
+    return gr.File.update(value=buf, label="pipeline_export.pkl")
+
+
+def import_all_file(file_obj, merge_db: bool = True) -> str:
+    """
+    Imports a single pickle file containing both the config and database.
+    If merge_db=False, overwrites the existing DB; otherwise merges.
+    """
+    if file_obj is None:
+        return "No file provided."
+
+    # file_obj is a dict-like object returned by Gradio, with keys like:
+    # {'name': ..., 'size': ..., 'data': ...} if type="file" 
+    # or just a path if type="filepath".
+    # We can handle either scenario depending on your app config.
+    filepath = file_obj.name if hasattr(file_obj, "name") else file_obj
+
+    if not os.path.exists(filepath):
+        return "File not found."
+
+    # Load the data
+    with open(filepath, 'rb') as f:
+        combined_data = pickle.load(f)
+
+    if not isinstance(combined_data, dict):
+        return "Invalid combined data format."
+
+    # Rebuild config
+    new_cfg_data = combined_data.get("config", {})
+    new_cfg = PipelineConfig(**new_cfg_data)
+
+    # Rebuild DB
+    new_db_data = combined_data.get("database", {})
+
+    # Re-initialize pipeline with new config
+    global pipeline
+    pipeline = FacePipeline(new_cfg)
+    pipeline.initialize()
+
+    # Merge or overwrite DB
+    if merge_db:
+        # Merge
+        for label, emb_list in new_db_data.items():
+            if label not in pipeline.db.embeddings:
+                pipeline.db.embeddings[label] = []
+            pipeline.db.embeddings[label].extend(emb_list)
+        pipeline.db.save()
+    else:
+        # Overwrite
+        pipeline.db.embeddings = new_db_data
+        pipeline.db.save()
+
+    return "Config and database imported successfully!"
+
+
+# ==========================
+# Original Export/Import for
+# Config or DB individually
+# ==========================
+
 def export_config_file(export_path: str) -> str:
-    """Export the current pipeline config to a chosen path."""
+    """Export the current pipeline config to a chosen path on the server."""
     pl = load_pipeline()
     return pl.config.export_config(export_path)
 
@@ -937,7 +1011,7 @@ def import_config_file(import_path: str) -> str:
 
 
 def export_db_file(export_path: str) -> str:
-    """Export the current face database to a chosen path."""
+    """Export the current face database to a chosen path on the server."""
     pl = load_pipeline()
     try:
         pl.db.export_database(export_path)
@@ -958,6 +1032,7 @@ def import_db_file(import_path: str, merge: bool=True) -> str:
         return f"Import DB failed: {str(e)}"
 
 
+# Build Gradio App
 def build_app():
     with gr.Blocks() as demo:
         gr.Markdown("# Complete Face Recognition System (Single-Image) with Mediapipe")
@@ -1100,7 +1175,7 @@ def build_app():
         with gr.Tab("Export / Import"):
             gr.Markdown("Export or import pipeline config (thresholds/colors) or face database (embeddings).")
 
-            gr.Markdown("**Export**")
+            gr.Markdown("**Export Individually (Server Paths)**")
             export_config_path = gr.Textbox(label="Export Config Path", value="my_config.pkl")
             export_config_btn = gr.Button("Export Config")
             export_config_out = gr.Textbox()
@@ -1112,7 +1187,7 @@ def build_app():
             export_config_btn.click(export_config_file, inputs=[export_config_path], outputs=[export_config_out])
             export_db_btn.click(export_db_file, inputs=[export_db_path], outputs=[export_db_out])
 
-            gr.Markdown("**Import**")
+            gr.Markdown("**Import Individually (Server Paths)**")
             import_config_filebox = gr.File(label="Import Config File", file_count="single", type="filepath")
             import_config_btn = gr.Button("Import Config")
             import_config_out = gr.Textbox()
@@ -1125,12 +1200,41 @@ def build_app():
             import_config_btn.click(fn=import_config_file, inputs=[import_config_filebox], outputs=[import_config_out])
             import_db_btn.click(fn=import_db_file, inputs=[import_db_filebox, merge_db_checkbox], outputs=[import_db_out])
 
+            # =============================
+            # Export/Import All Together
+            # =============================
+            gr.Markdown("---")
+            gr.Markdown("**Export & Import Everything (Config + Database) Together**")
+
+            # For exporting: we'll just produce a file in-memory
+            export_all_btn = gr.Button("Export All (Config + DB)")
+            export_all_file_out = gr.File(label="Download Combined Export")
+
+            export_all_btn.click(
+                fn=export_all_file,
+                outputs=[export_all_file_out],
+                inputs=[]
+            )
+
+            # For importing: user uploads file
+            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single")
+            import_all_merge_cb = gr.Checkbox(label="Merge DB instead of overwrite?", value=True)
+            import_all_btn = gr.Button("Import All")
+            import_all_out = gr.Textbox()
+
+            import_all_btn.click(
+                fn=import_all_file,
+                inputs=[import_all_in, import_all_merge_cb],
+                outputs=[import_all_out]
+            )
+
     return demo
 
 
 def main():
     """Entry point to launch the Gradio app."""
     app = build_app()
+    # We add `.queue()` so that multiple requests can be queued
     app.queue().launch(server_name="0.0.0.0", server_port=7860)
 
 
