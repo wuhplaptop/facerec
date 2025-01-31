@@ -11,6 +11,7 @@ from PIL import Image
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass, field
 from collections import Counter
+import io
 
 import gradio as gr
 
@@ -128,18 +129,28 @@ class PipelineConfig:
             logger.error(f"Config load failed: {str(e)}")
             return cls()
 
-    def export_config(self, export_path: str) -> str:
-        """Convenience method: export your config to any chosen path."""
+    def export_config(self) -> bytes:
+        """Export your config to bytes."""
         try:
-            self.save(export_path)
-            return f"Exported config to {export_path}"
+            config_data = self.__dict__
+            buf = io.BytesIO()
+            pickle.dump(config_data, buf)
+            buf.seek(0)
+            return buf.read()
         except Exception as e:
-            return f"Export failed: {str(e)}"
+            logger.error(f"Export config failed: {str(e)}")
+            raise RuntimeError(f"Export config failed: {str(e)}") from e
 
     @classmethod
-    def import_config(cls, import_path: str) -> 'PipelineConfig':
-        """Convenience method: load config from a chosen path."""
-        return cls.load(import_path)
+    def import_config(cls, config_bytes: bytes) -> 'PipelineConfig':
+        """Import config from bytes."""
+        try:
+            buf = io.BytesIO(config_bytes)
+            data = pickle.load(buf)
+            return cls(**data)
+        except Exception as e:
+            logger.error(f"Import config failed: {str(e)}")
+            raise RuntimeError(f"Import config failed: {str(e)}") from e
 
 class FaceDatabase:
     def __init__(self, db_path: str = DEFAULT_DB_PATH):
@@ -167,46 +178,42 @@ class FaceDatabase:
             logger.error(f"Database save failed: {str(e)}")
             raise RuntimeError(f"Database save failed: {str(e)}") from e
 
-    def export_database(self, export_path: str):
-        """Export the entire face embeddings DB to a given .pkl file."""
+    def export_database(self) -> bytes:
+        """Export the entire face embeddings DB to bytes."""
         try:
-            with open(export_path, 'wb') as f:
-                pickle.dump(self.embeddings, f)
-            logger.info(f"Exported face database to {export_path}")
+            db_data = self.embeddings
+            buf = io.BytesIO()
+            pickle.dump(db_data, buf)
+            buf.seek(0)
+            return buf.read()
         except Exception as e:
             logger.error(f"Export database failed: {str(e)}")
-            raise
+            raise RuntimeError(f"Export database failed: {str(e)}") from e
 
-    def import_database(self, import_path: str, merge: bool = True):
+    def import_database(self, db_bytes: bytes, merge: bool = True):
         """
-        Import embeddings from a .pkl file.
+        Import embeddings from bytes.
         If merge=True, merges with current DB. If False, overwrites.
         """
-        if not os.path.isfile(import_path):
-            logger.warning(f"No file found at {import_path}")
-            return
-
         try:
-            with open(import_path, 'rb') as f:
-                imported_data = pickle.load(f)
+            buf = io.BytesIO(db_bytes)
+            imported_data = pickle.load(buf)
+            if not isinstance(imported_data, dict):
+                raise ValueError("Imported data is not a dictionary!")
+
+            if merge:
+                for label, emb_list in imported_data.items():
+                    if label not in self.embeddings:
+                        self.embeddings[label] = []
+                    self.embeddings[label].extend(emb_list)
+            else:
+                self.embeddings = imported_data
+
+            self.save()
+            logger.info(f"Imported face database, merge={merge}")
         except Exception as e:
-            logger.error(f"Error loading import file: {str(e)}")
-            return
-
-        if not isinstance(imported_data, dict):
-            logger.error("Imported data is not a dictionary!")
-            return
-
-        if merge:
-            for label, emb_list in imported_data.items():
-                if label not in self.embeddings:
-                    self.embeddings[label] = []
-                self.embeddings[label].extend(emb_list)
-        else:
-            self.embeddings = imported_data
-
-        logger.info(f"Imported face database from {import_path}, merge={merge}")
-        self.save()
+            logger.error(f"Import database failed: {str(e)}")
+            raise RuntimeError(f"Import database failed: {str(e)}") from e
 
     def add_embedding(self, label: str, embedding: np.ndarray):
         try:
@@ -501,20 +508,19 @@ class HandTracker:
             logger.error(f"Hand detection error: {str(e)}")
             return None, None
 
-    def draw_hands(self, image: np.ndarray, hand_landmarks, handedness, config):
+    def draw_hands(self, image: np.ndarray, hand_landmarks, handedness, config: Dict):
         if not hand_landmarks:
             return image
 
-        mpdraw = mp_drawing
         for i, hlms in enumerate(hand_landmarks):
             hl_color = config.hand_landmark_color[::-1]
             hc_color = config.hand_connection_color[::-1]
-            mpdraw.draw_landmarks(
+            mp_drawing.draw_landmarks(
                 image,
                 hlms,
                 mp_hands.HAND_CONNECTIONS,
-                mpdraw.DrawingSpec(color=hl_color, thickness=2, circle_radius=4),
-                mpdraw.DrawingSpec(color=hc_color, thickness=2, circle_radius=2),
+                mp_drawing.DrawingSpec(color=hl_color, thickness=2, circle_radius=4),
+                mp_drawing.DrawingSpec(color=hc_color, thickness=2, circle_radius=2),
             )
             if handedness and i < len(handedness):
                 label = handedness[i].classification[0].label
@@ -522,8 +528,8 @@ class HandTracker:
                 text = f"{label}: {score:.2f}"
 
                 wrist_lm = hlms.landmark[mp_hands.HandLandmark.WRIST]
-                h, w, _ = image.shape
-                cx, cy = int(wrist_lm.x * w), int(wrist_lm.y * h)
+                h, w_img, _ = image.shape
+                cx, cy = int(wrist_lm.x * w_img), int(wrist_lm.y * h)
                 ht_color = config.hand_text_color[::-1]
                 cv2.putText(image, text, (cx, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, ht_color, 2)
         return image
@@ -799,31 +805,37 @@ def update_config(
     cfg.save(CONFIG_PATH)
     return "Configuration saved successfully!"
 
-def enroll_user(label_name: str, filepaths: List[str]) -> str:
-    """Enrolls a user by name using multiple image file paths."""
+def enroll_user(label_name: str, files: List[gr.components.File]) -> str:
+    """Enrolls a user by name using multiple uploaded image files."""
     pl = load_pipeline()
     if not label_name:
         return "Please provide a user name."
-    if not filepaths or len(filepaths) == 0:
+    if not files or len(files) == 0:
         return "No images provided."
 
     enrolled_count = 0
-    for path in filepaths:
-        if not os.path.isfile(path):
+    for file in files:
+        if not file:
             continue
-        img_bgr = cv2.imread(path)
-        if img_bgr is None:
-            continue
-
-        dets = pl.detector.detect(img_bgr, pl.config.detection_conf_thres)
-        for x1, y1, x2, y2, conf, cls in dets:
-            roi = img_bgr[y1:y2, x1:x2]
-            if roi.size == 0:
+        try:
+            img_bytes = file.read()
+            img_array = np.frombuffer(img_bytes, np.uint8)
+            img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            if img_bgr is None:
                 continue
-            emb = pl.facenet.get_embedding(roi)
-            if emb is not None:
-                pl.db.add_embedding(label_name, emb)
-                enrolled_count += 1
+
+            dets = pl.detector.detect(img_bgr, pl.config.detection_conf_thres)
+            for x1, y1, x2, y2, conf, cls in dets:
+                roi = img_bgr[y1:y2, x1:x2]
+                if roi.size == 0:
+                    continue
+                emb = pl.facenet.get_embedding(roi)
+                if emb is not None:
+                    pl.db.add_embedding(label_name, emb)
+                    enrolled_count += 1
+        except Exception as e:
+            logger.error(f"Error enrolling user from file: {str(e)}")
+            continue
 
     if enrolled_count > 0:
         pl.db.save()
@@ -903,7 +915,6 @@ def export_all_file() -> Tuple[bytes, str]:
     }
 
     # Create an in-memory buffer and pickle the combined data
-    import io
     buf = io.BytesIO()
     pickle.dump(combined_data, buf)
     buf.seek(0)
@@ -923,13 +934,9 @@ def import_all_file(file_obj, merge_db: bool = True) -> str:
         return "No file provided."
 
     try:
-        # If file_obj is bytes, use BytesIO to read
-        if isinstance(file_obj, bytes):
-            buf = io.BytesIO(file_obj)
-        elif hasattr(file_obj, "read"):
-            buf = file_obj
-        else:
-            return "Invalid file format."
+        # Read bytes from the uploaded file
+        file_bytes = file_obj.read()
+        buf = io.BytesIO(file_bytes)
 
         # Load the data from the buffer
         combined_data = pickle.load(buf)
@@ -973,39 +980,45 @@ def import_all_file(file_obj, merge_db: bool = True) -> str:
 # Config or DB individually
 # ==========================
 
-def export_config_file(export_path: str) -> str:
-    """Export the current pipeline config to a chosen path on the server."""
+def export_config_file() -> Tuple[bytes, str]:
+    """Export the current pipeline config as a downloadable file."""
     pl = load_pipeline()
-    return pl.config.export_config(export_path)
+    config_bytes = pl.config.export_config()
+    return (config_bytes, "config_export.pkl")
 
-def import_config_file(import_path: str) -> str:
-    """Import a pipeline config from a file and re-initialize pipeline."""
-    if not os.path.isfile(import_path):
-        return f"No file found at {import_path}"
-    global pipeline
-    new_cfg = PipelineConfig.import_config(import_path)
-    pipeline = FacePipeline(new_cfg)
-    pipeline.initialize()
-    return f"Imported config from {import_path}"
-
-def export_db_file(export_path: str) -> str:
-    """Export the current face database to a chosen path on the server."""
-    pl = load_pipeline()
+def import_config_file(file_obj) -> str:
+    """Import a pipeline config from an uploaded file and re-initialize pipeline."""
+    if not file_obj:
+        return "No file provided."
     try:
-        pl.db.export_database(export_path)
-        return f"Database exported to {export_path}"
+        config_bytes = file_obj.read()
+        new_cfg = PipelineConfig.import_config(config_bytes)
+        pl = FacePipeline(new_cfg)
+        pl.initialize()
+        global pipeline
+        pipeline = pl
+        return f"Imported config successfully!"
     except Exception as e:
-        return f"Export failed: {str(e)}"
+        logger.error(f"Import config failed: {str(e)}")
+        return f"Import failed: {str(e)}"
 
-def import_db_file(import_path: str, merge: bool=True) -> str:
-    """Import face database from a file. Merge or overwrite existing."""
+def export_db_file() -> Tuple[bytes, str]:
+    """Export the current face database as a downloadable file."""
     pl = load_pipeline()
-    if not os.path.isfile(import_path):
-        return f"No file found at {import_path}"
+    db_bytes = pl.db.export_database()
+    return (db_bytes, "database_export.pkl")
+
+def import_db_file(file_obj, merge: bool=True) -> str:
+    """Import face database from an uploaded file. Merge or overwrite existing."""
+    if not file_obj:
+        return "No file provided."
     try:
-        pl.db.import_database(import_path, merge=merge)
-        return f"Database imported from {import_path}, merge={merge}"
+        db_bytes = file_obj.read()
+        pl = load_pipeline()
+        pl.db.import_database(db_bytes, merge=merge)
+        return f"Database imported successfully, merge={merge}"
     except Exception as e:
+        logger.error(f"Import DB failed: {str(e)}")
         return f"Import DB failed: {str(e)}"
 
 # Build Gradio App
@@ -1088,7 +1101,7 @@ def build_app():
 
             with gr.Accordion("User Enrollment", open=False):
                 enroll_name = gr.Textbox(label="User Name")
-                enroll_paths = gr.File(file_count="multiple", type="filepath", label="Upload Multiple Images")  # Updated here
+                enroll_paths = gr.File(file_count="multiple", type="file", label="Upload Multiple Images")  # Fixed here
                 enroll_btn = gr.Button("Enroll User")
                 enroll_result = gr.Textbox()
 
@@ -1151,24 +1164,22 @@ def build_app():
         with gr.Tab("Export / Import"):
             gr.Markdown("Export or import pipeline config (thresholds/colors) or face database (embeddings).")
 
-            gr.Markdown("**Export Individually (Server Paths)**")
-            export_config_path = gr.Textbox(label="Export Config Path", value="my_config.pkl")
+            gr.Markdown("**Export Individually (Download)**")
             export_config_btn = gr.Button("Export Config")
-            export_config_out = gr.Textbox()
+            export_config_out = gr.File(label="Download Config Export")
 
-            export_db_path = gr.Textbox(label="Export Database Path", value="my_database.pkl")
             export_db_btn = gr.Button("Export Database")
-            export_db_out = gr.Textbox()
+            export_db_out = gr.File(label="Download Database Export")
 
-            export_config_btn.click(export_config_file, inputs=[export_config_path], outputs=[export_config_out])
-            export_db_btn.click(export_db_file, inputs=[export_db_path], outputs=[export_db_out])
+            export_config_btn.click(export_config_file, inputs=[], outputs=[export_config_out])
+            export_db_btn.click(export_db_file, inputs=[], outputs=[export_db_out])
 
-            gr.Markdown("**Import Individually (Server Paths)**")
-            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="filepath")  # Updated here
+            gr.Markdown("**Import Individually (Upload)**")
+            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="file")  # Fixed here
             import_config_btn = gr.Button("Import Config")
             import_config_out = gr.Textbox()
 
-            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="filepath")  # Updated here
+            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="file")  # Fixed here
             merge_db_checkbox = gr.Checkbox(label="Merge instead of overwrite?", value=True)
             import_db_btn = gr.Button("Import Database")
             import_db_out = gr.Textbox()
@@ -1193,7 +1204,7 @@ def build_app():
             )
 
             # For importing: user uploads file
-            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="filepath")  # Updated here
+            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="file")  # Fixed here
             import_all_merge_cb = gr.Checkbox(label="Merge DB instead of overwrite?", value=True)
             import_all_btn = gr.Button("Import All")
             import_all_out = gr.Textbox()
@@ -1204,7 +1215,7 @@ def build_app():
                 outputs=[import_all_out]
             )
 
-    return demo
+        return demo
 
 def main():
     """Entry point to launch the Gradio app."""
