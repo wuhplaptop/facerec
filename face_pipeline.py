@@ -141,7 +141,6 @@ class PipelineConfig:
         """Convenience method: load config from a chosen path."""
         return cls.load(import_path)
 
-
 class FaceDatabase:
     def __init__(self, db_path: str = DEFAULT_DB_PATH):
         self.db_path = db_path
@@ -242,11 +241,10 @@ class FaceDatabase:
         results = []
         for lbl, embs in self.embeddings.items():
             for db_emb in embs:
-                similarity = FacePipeline.cosine_similarity(query_embedding, db_emb)
-                if similarity >= threshold:
-                    results.append((lbl, similarity))
+                sim = FacePipeline.cosine_similarity(query_embedding, db_emb)
+                if sim >= threshold:
+                    results.append((lbl, sim))
         return sorted(results, key=lambda x: x[1], reverse=True)
-
 
 class YOLOFaceDetector:
     def __init__(self, model_path: str, device: str = 'cpu'):
@@ -287,7 +285,6 @@ class YOLOFaceDetector:
             logger.error(f"Detection error: {str(e)}")
             return []
 
-
 class FaceTracker:
     def __init__(self, max_age: int = 30):
         self.tracker = DeepSort(max_age=max_age, embedder='mobilenet')
@@ -304,7 +301,6 @@ class FaceTracker:
         except Exception as e:
             logger.error(f"Tracking error: {str(e)}")
             return []
-
 
 class FaceNetEmbedder:
     def __init__(self, device: str = 'cpu'):
@@ -328,7 +324,6 @@ class FaceNetEmbedder:
         except Exception as e:
             logger.error(f"Embedding failed: {str(e)}")
             return None
-
 
 def detect_blink(face_roi: np.ndarray, threshold: float = 0.25) -> Tuple[bool, float, float, np.ndarray, np.ndarray]:
     """
@@ -372,7 +367,6 @@ def detect_blink(face_roi: np.ndarray, threshold: float = 0.25) -> Tuple[bool, f
         logger.error(f"Blink detection error: {str(e)}")
         return False, 0.0, 0.0, None, None
 
-
 def process_face_mesh(face_roi: np.ndarray):
     try:
         fm_proc = mp_face_mesh.FaceMesh(
@@ -389,7 +383,6 @@ def process_face_mesh(face_roi: np.ndarray):
     except Exception as e:
         logger.error(f"Face mesh error: {str(e)}")
         return None
-
 
 def draw_face_mesh(image: np.ndarray, face_landmarks, config: Dict, pipeline_config: PipelineConfig):
     mesh_color_bgr = pipeline_config.mesh_color[::-1]
@@ -421,7 +414,6 @@ def draw_face_mesh(image: np.ndarray, face_landmarks, config: Dict, pipeline_con
             connection_drawing_spec=mp_drawing.DrawingSpec(color=iris_color_bgr, thickness=2)
         )
 
-
 EYE_COLOR_RANGES = {
     "amber": (255, 191, 0),
     "blue": (0, 0, 255),
@@ -430,7 +422,6 @@ EYE_COLOR_RANGES = {
     "gray": (128, 128, 128),
     "hazel": (102, 51, 0),
 }
-
 
 def classify_eye_color(rgb_color: Tuple[int,int,int]) -> str:
     if rgb_color is None:
@@ -444,7 +435,6 @@ def classify_eye_color(rgb_color: Tuple[int,int,int]) -> str:
             best = color_name
     return best
 
-
 def get_dominant_color(image_roi, k=3):
     if image_roi.size == 0:
         return None
@@ -454,7 +444,6 @@ def get_dominant_color(image_roi, k=3):
     _, counts = np.unique(labels, return_counts=True)
     dom_color = tuple(palette[np.argmax(counts)].astype(int).tolist())
     return dom_color
-
 
 def detect_eye_color(face_roi: np.ndarray, face_landmarks) -> Optional[str]:
     if face_landmarks is None:
@@ -492,7 +481,6 @@ def detect_eye_color(face_roi: np.ndarray, face_landmarks) -> Optional[str]:
     if dom_rgb is not None:
         return classify_eye_color(dom_rgb)
     return None
-
 
 class HandTracker:
     def __init__(self, min_detection_confidence=0.5, min_tracking_confidence=0.5):
@@ -539,7 +527,6 @@ class HandTracker:
                 ht_color = config.hand_text_color[::-1]
                 cv2.putText(image, text, (cx, cy - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, ht_color, 2)
         return image
-
 
 class FacePipeline:
     def __init__(self, config: PipelineConfig):
@@ -742,7 +729,6 @@ class FacePipeline:
     def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
         return float(np.dot(a, b) / ((np.linalg.norm(a)*np.linalg.norm(b)) + 1e-6))
 
-
 pipeline = None
 def load_pipeline() -> FacePipeline:
     """Global pipeline loader. Creates if not exists, or returns existing one."""
@@ -752,7 +738,6 @@ def load_pipeline() -> FacePipeline:
         pipeline = FacePipeline(cfg)
         pipeline.initialize()
     return pipeline
-
 
 def hex_to_bgr(hexstr: str) -> Tuple[int,int,int]:
     if not hexstr.startswith('#'):
@@ -765,11 +750,9 @@ def hex_to_bgr(hexstr: str) -> Tuple[int,int,int]:
     b = int(h[4:6], 16)
     return (b,g,r)
 
-
 def bgr_to_hex(bgr: Tuple[int,int,int]) -> str:
     b,g,r = bgr
     return f"#{r:02x}{g:02x}{b:02x}"
-
 
 def update_config(
     enable_recognition, enable_antispoof, enable_blink, enable_hand, enable_eyecolor, enable_facemesh,
@@ -816,7 +799,6 @@ def update_config(
     cfg.save(CONFIG_PATH)
     return "Configuration saved successfully!"
 
-
 def enroll_user(label_name: str, filepaths: List[str]) -> str:
     """Enrolls a user by name using multiple image file paths."""
     pl = load_pipeline()
@@ -849,7 +831,6 @@ def enroll_user(label_name: str, filepaths: List[str]) -> str:
     else:
         return "No faces detected in provided images."
 
-
 def search_by_name(name: str) -> str:
     pl = load_pipeline()
     if not name:
@@ -859,7 +840,6 @@ def search_by_name(name: str) -> str:
         return f"'{name}' found with {len(embs)} embedding(s)."
     else:
         return f"No embeddings found for '{name}'."
-
 
 def search_by_image(img: np.ndarray) -> str:
     pl = load_pipeline()
@@ -883,7 +863,6 @@ def search_by_image(img: np.ndarray) -> str:
     lines = [f"- {lbl} (sim={sim:.3f})" for lbl, sim in results]
     return "Search results:\n" + "\n".join(lines)
 
-
 def remove_user(label: str) -> str:
     pl = load_pipeline()
     if not label:
@@ -892,14 +871,12 @@ def remove_user(label: str) -> str:
     pl.db.save()
     return f"User '{label}' removed."
 
-
 def list_users() -> str:
     pl = load_pipeline()
     labels = pl.db.list_labels()
     if labels:
         return "Enrolled users:\n" + ", ".join(labels)
     return "No users enrolled."
-
 
 def process_test_image(img: np.ndarray) -> Tuple[np.ndarray, str]:
     """Single-image test: run pipeline and return annotated image + JSON results."""
@@ -911,30 +888,31 @@ def process_test_image(img: np.ndarray) -> Tuple[np.ndarray, str]:
     result_rgb = cv2.cvtColor(processed, cv2.COLOR_BGR2RGB)
     return result_rgb, str(detections)
 
-
 # ===================================
 # Combined Export/Import (Config + DB)
 # ===================================
-def export_all_file() -> gr.File:
+def export_all_file() -> Tuple[bytes, str]:
     """
     Exports both the pipeline config and database embeddings into a single
-    pickle file. Returns a Gradio File object so the user can download it.
+    pickle file. Returns the file content and filename as a tuple for Gradio to handle the download.
     """
     pl = load_pipeline()
     combined_data = {
-        "config": pl.config.__dict__,   # or you could store a version of PipelineConfig by name
+        "config": pl.config.__dict__,
         "database": pl.db.embeddings
     }
 
-    # We'll create an in-memory buffer and return it as a downloadable file
+    # Create an in-memory buffer and pickle the combined data
     import io
     buf = io.BytesIO()
     pickle.dump(combined_data, buf)
     buf.seek(0)
 
-    # Gradio can return (file-like object, "filename.ext")
-    return gr.File.update(value=buf, label="pipeline_export.pkl")
+    # Read the buffer's content
+    file_content = buf.read()
 
+    # Return a tuple of (file content, filename)
+    return (file_content, "pipeline_export.pkl")
 
 def import_all_file(file_obj, merge_db: bool = True) -> str:
     """
@@ -944,49 +922,51 @@ def import_all_file(file_obj, merge_db: bool = True) -> str:
     if file_obj is None:
         return "No file provided."
 
-    # file_obj is a dict-like object returned by Gradio, with keys like:
-    # {'name': ..., 'size': ..., 'data': ...} if type="file" 
-    # or just a path if type="filepath".
-    # We can handle either scenario depending on your app config.
-    filepath = file_obj.name if hasattr(file_obj, "name") else file_obj
+    try:
+        # If file_obj is bytes, use BytesIO to read
+        if isinstance(file_obj, bytes):
+            buf = io.BytesIO(file_obj)
+        elif hasattr(file_obj, "read"):
+            buf = file_obj
+        else:
+            return "Invalid file format."
 
-    if not os.path.exists(filepath):
-        return "File not found."
+        # Load the data from the buffer
+        combined_data = pickle.load(buf)
 
-    # Load the data
-    with open(filepath, 'rb') as f:
-        combined_data = pickle.load(f)
+        if not isinstance(combined_data, dict):
+            return "Invalid combined data format."
 
-    if not isinstance(combined_data, dict):
-        return "Invalid combined data format."
+        # Rebuild config
+        new_cfg_data = combined_data.get("config", {})
+        new_cfg = PipelineConfig(**new_cfg_data)
 
-    # Rebuild config
-    new_cfg_data = combined_data.get("config", {})
-    new_cfg = PipelineConfig(**new_cfg_data)
+        # Rebuild DB
+        new_db_data = combined_data.get("database", {})
 
-    # Rebuild DB
-    new_db_data = combined_data.get("database", {})
+        # Re-initialize pipeline with new config
+        global pipeline
+        pipeline = FacePipeline(new_cfg)
+        pipeline.initialize()
 
-    # Re-initialize pipeline with new config
-    global pipeline
-    pipeline = FacePipeline(new_cfg)
-    pipeline.initialize()
+        # Merge or overwrite DB
+        if merge_db:
+            # Merge
+            for label, emb_list in new_db_data.items():
+                if label not in pipeline.db.embeddings:
+                    pipeline.db.embeddings[label] = []
+                pipeline.db.embeddings[label].extend(emb_list)
+            pipeline.db.save()
+        else:
+            # Overwrite
+            pipeline.db.embeddings = new_db_data
+            pipeline.db.save()
 
-    # Merge or overwrite DB
-    if merge_db:
-        # Merge
-        for label, emb_list in new_db_data.items():
-            if label not in pipeline.db.embeddings:
-                pipeline.db.embeddings[label] = []
-            pipeline.db.embeddings[label].extend(emb_list)
-        pipeline.db.save()
-    else:
-        # Overwrite
-        pipeline.db.embeddings = new_db_data
-        pipeline.db.save()
+        return "Config and database imported successfully!"
 
-    return "Config and database imported successfully!"
-
+    except Exception as e:
+        logger.error(f"Import all failed: {str(e)}")
+        return f"Import failed: {str(e)}"
 
 # ==========================
 # Original Export/Import for
@@ -998,7 +978,6 @@ def export_config_file(export_path: str) -> str:
     pl = load_pipeline()
     return pl.config.export_config(export_path)
 
-
 def import_config_file(import_path: str) -> str:
     """Import a pipeline config from a file and re-initialize pipeline."""
     if not os.path.isfile(import_path):
@@ -1009,7 +988,6 @@ def import_config_file(import_path: str) -> str:
     pipeline.initialize()
     return f"Imported config from {import_path}"
 
-
 def export_db_file(export_path: str) -> str:
     """Export the current face database to a chosen path on the server."""
     pl = load_pipeline()
@@ -1018,7 +996,6 @@ def export_db_file(export_path: str) -> str:
         return f"Database exported to {export_path}"
     except Exception as e:
         return f"Export failed: {str(e)}"
-
 
 def import_db_file(import_path: str, merge: bool=True) -> str:
     """Import face database from a file. Merge or overwrite existing."""
@@ -1031,11 +1008,10 @@ def import_db_file(import_path: str, merge: bool=True) -> str:
     except Exception as e:
         return f"Import DB failed: {str(e)}"
 
-
 # Build Gradio App
 def build_app():
     with gr.Blocks() as demo:
-        gr.Markdown("# Complete Face Recognition System (Single-Image) with Mediapipe")
+        gr.Markdown("# FaceRec: Comprehensive Face Recognition Pipeline")
 
         with gr.Tab("Image Test"):
             gr.Markdown("Upload a single image to detect faces, run blink detection, face mesh, hand tracking, etc.")
@@ -1112,7 +1088,7 @@ def build_app():
 
             with gr.Accordion("User Enrollment", open=False):
                 enroll_name = gr.Textbox(label="User Name")
-                enroll_paths = gr.File(file_count="multiple", type="filepath", label="Upload Multiple Images")
+                enroll_paths = gr.File(file_count="multiple", type="file", label="Upload Multiple Images")
                 enroll_btn = gr.Button("Enroll User")
                 enroll_result = gr.Textbox()
 
@@ -1188,11 +1164,11 @@ def build_app():
             export_db_btn.click(export_db_file, inputs=[export_db_path], outputs=[export_db_out])
 
             gr.Markdown("**Import Individually (Server Paths)**")
-            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="filepath")
+            import_config_filebox = gr.File(label="Import Config File", file_count="single", type="file")
             import_config_btn = gr.Button("Import Config")
             import_config_out = gr.Textbox()
 
-            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="filepath")
+            import_db_filebox = gr.File(label="Import Database File", file_count="single", type="file")
             merge_db_checkbox = gr.Checkbox(label="Merge instead of overwrite?", value=True)
             import_db_btn = gr.Button("Import Database")
             import_db_out = gr.Textbox()
@@ -1217,7 +1193,7 @@ def build_app():
             )
 
             # For importing: user uploads file
-            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single")
+            import_all_in = gr.File(label="Import Combined File (Pickle)", file_count="single", type="file")
             import_all_merge_cb = gr.Checkbox(label="Merge DB instead of overwrite?", value=True)
             import_all_btn = gr.Button("Import All")
             import_all_out = gr.Textbox()
@@ -1230,13 +1206,11 @@ def build_app():
 
     return demo
 
-
 def main():
     """Entry point to launch the Gradio app."""
     app = build_app()
     # We add `.queue()` so that multiple requests can be queued
     app.queue().launch(server_name="0.0.0.0", server_port=7860)
-
 
 if __name__ == "__main__":
     main()
