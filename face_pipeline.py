@@ -22,6 +22,7 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 
 import mediapipe as mp
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -29,18 +30,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress verbose logs from libraries
 logging.getLogger('torch').setLevel(logging.ERROR)
 logging.getLogger('mediapipe').setLevel(logging.ERROR)
 logging.getLogger('deep_sort_realtime').setLevel(logging.ERROR)
 
+# Constants and default paths
 DEFAULT_MODEL_URL = "https://github.com/wuhplaptop/face-11-n/blob/main/face2.pt?raw=true"
 DEFAULT_DB_PATH = os.path.expanduser("~/.face_pipeline/known_faces.pkl")
 MODEL_DIR = os.path.expanduser("~/.face_pipeline/models")
 CONFIG_PATH = os.path.expanduser("~/.face_pipeline/config.pkl")
 
+# Mediapipe indices for eye landmarks
 LEFT_EYE_IDX = [33, 160, 158, 133, 153, 144]
 RIGHT_EYE_IDX = [263, 387, 385, 362, 380, 373]
 
+# Initialize Mediapipe drawing utilities
 mp_drawing = mp.solutions.drawing_utils
 mp_face_mesh = mp.solutions.face_mesh
 mp_hands = mp.solutions.hands
@@ -902,10 +907,10 @@ def process_test_image(img: np.ndarray) -> Tuple[np.ndarray, str]:
 # ===================================
 # Combined Export/Import (Config + DB)
 # ===================================
-def export_all_file() -> Tuple[bytes, str]:
+def export_all_file() -> bytes:
     """
     Exports both the pipeline config and database embeddings into a single
-    pickle file. Returns the file content and filename as a tuple for Gradio to handle the download.
+    pickle file. Returns the file content as bytes for Gradio to handle the download.
     """
     pl = load_pipeline()
     combined_data = {
@@ -921,15 +926,15 @@ def export_all_file() -> Tuple[bytes, str]:
     # Read the buffer's content
     file_content = buf.read()
 
-    # Return a tuple of (file content, filename)
-    return (file_content, "pipeline_export.pkl")
+    # Return only the file content as bytes
+    return file_content
 
 def import_all_file(file_bytes: bytes, merge_db: bool = True) -> str:
     """
     Imports a single pickle file containing both the config and database.
     If merge_db=False, overwrites the existing DB; otherwise merges.
     """
-    if file_bytes is None:
+    if not file_bytes:
         return "No file provided."
 
     try:
@@ -976,11 +981,11 @@ def import_all_file(file_bytes: bytes, merge_db: bool = True) -> str:
 # Config or DB individually
 # ==========================
 
-def export_config_file() -> Tuple[bytes, str]:
+def export_config_file() -> bytes:
     """Export the current pipeline config as a downloadable file."""
     pl = load_pipeline()
     config_bytes = pl.config.export_config()
-    return (config_bytes, "config_export.pkl")
+    return config_bytes
 
 def import_config_file(file_bytes: bytes) -> str:
     """Import a pipeline config from uploaded bytes and re-initialize pipeline."""
@@ -997,11 +1002,11 @@ def import_config_file(file_bytes: bytes) -> str:
         logger.error(f"Import config failed: {str(e)}")
         return f"Import failed: {str(e)}"
 
-def export_db_file() -> Tuple[bytes, str]:
+def export_db_file() -> bytes:
     """Export the current face database as a downloadable file."""
     pl = load_pipeline()
     db_bytes = pl.db.export_database()
-    return (db_bytes, "database_export.pkl")
+    return db_bytes
 
 def import_db_file(db_bytes: bytes, merge: bool=True) -> str:
     """Import face database from uploaded bytes. Merge or overwrite existing."""
@@ -1019,6 +1024,7 @@ def import_db_file(db_bytes: bytes, merge: bool=True) -> str:
 def build_app():
     with gr.Blocks() as demo:
         gr.Markdown("# FaceRec: Comprehensive Face Recognition Pipeline")
+        gr.Markdown("**Note:** After downloading, please rename the file to its appropriate extension (e.g., `config_export.pkl`, `database_export.pkl`).")
 
         with gr.Tab("Image Test"):
             gr.Markdown("Upload a single image to detect faces, run blink detection, face mesh, hand tracking, etc.")
@@ -1095,7 +1101,7 @@ def build_app():
 
             with gr.Accordion("User Enrollment", open=False):
                 enroll_name = gr.Textbox(label="User Name")
-                enroll_paths = gr.File(file_count="multiple", type="binary", label="Upload Multiple Images")  # Corrected
+                enroll_paths = gr.File(file_count="multiple", type="binary", label="Upload Multiple Images")
                 enroll_btn = gr.Button("Enroll User")
                 enroll_result = gr.Textbox()
 
@@ -1157,6 +1163,7 @@ def build_app():
 
         with gr.Tab("Export / Import"):
             gr.Markdown("Export or import pipeline config (thresholds/colors) or face database (embeddings).")
+            gr.Markdown("**Note:** After downloading, please rename the file to its appropriate extension (e.g., `config_export.pkl`, `database_export.pkl`).")
 
             gr.Markdown("**Export Individually (Download)**")
             export_config_btn = gr.Button("Export Config")
@@ -1186,13 +1193,14 @@ def build_app():
             # =============================
             gr.Markdown("---")
             gr.Markdown("**Export & Import Everything (Config + Database) Together**")
+            gr.Markdown("**Note:** After downloading, please rename the file to `pipeline_export.pkl`.")
 
-            # For exporting: we'll just produce a file in-memory
+            # For exporting: produce a file in-memory
             export_all_btn = gr.Button("Export All (Config + DB)")
             export_all_download = gr.File(label="Download Combined Export", type="binary")
 
             export_all_btn.click(
-                fn=export_all_file,
+                fn=export_all_file,  # Now returns only bytes
                 outputs=[export_all_download],
                 inputs=[]
             )
