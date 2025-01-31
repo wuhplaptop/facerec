@@ -959,11 +959,11 @@ def import_all_file(file_bytes: bytes, merge_db: bool = True) -> str:
                 if label not in pipeline.db.embeddings:
                     pipeline.db.embeddings[label] = []
                 pipeline.db.embeddings[label].extend(emb_list)
-            pipeline.db.save()
         else:
             # Overwrite
             pipeline.db.embeddings = new_db_data
-            pipeline.db.save()
+
+        pipeline.db.save()
 
         return "Config and database imported successfully!"
 
@@ -1165,8 +1165,8 @@ def build_app():
             export_db_btn = gr.Button("Export Database")
             export_db_download = gr.Download(label="Download Database Export")  # Changed to gr.Download
 
-            export_config_btn.click(export_config_file, inputs=[], outputs=[export_config_download])
-            export_db_btn.click(export_db_file, inputs=[], outputs=[export_db_download])
+            export_config_btn.click(fn=export_config_file, inputs=[], outputs=[export_config_download])
+            export_db_btn.click(fn=export_db_file, inputs=[], outputs=[export_db_download])
 
             gr.Markdown("**Import Individually (Upload)**")
             import_config_filebox = gr.File(label="Import Config File", file_count="single", type="binary")  # Updated
